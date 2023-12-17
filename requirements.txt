@@ -1,0 +1,6 @@
+aiohttp
+pydantic
+transformers
+vllm-client
+requests
+openai
