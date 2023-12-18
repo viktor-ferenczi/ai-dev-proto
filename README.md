@@ -193,8 +193,9 @@ Known limitations of this simple prototype.
 - Prepared to handle `.py`, `.cs` and `.cshtml` files, more are configurable.
 - The LLM can make mistakes, accidentally remove code or comments.
 - No support to build up test coverage (planned).
-- The CLI has no command to manage AI Dev.
-- parameters to   
+- The CLI has no commands yet, its arguments will change.
+- With 16k maximum context size it can handle source files of up to 5000 tokens in size.
+  (Later this will decrease to 3000.)
 
 ## Diagnostics
 
