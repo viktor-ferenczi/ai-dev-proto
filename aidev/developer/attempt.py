@@ -11,7 +11,7 @@ class AttemptState(SimpleEnum):
     INVALID = 'INVALID'
     BUILD_FAILED = 'BUILD_FAILED'
     TEST_FAILED = 'TEST_FAILED'
-    SUCCESSFUL = 'SUCCESSFUL'
+    COMPLETED = 'COMPLETED'
 
 
 class Attempt(BaseModel):

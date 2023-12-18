@@ -241,14 +241,14 @@ class Junior(Brain):
                         attempt.state = AttemptState.TEST_FAILED
                         attempt.error = error
                     else:
-                        attempt.state = AttemptState.SUCCESSFUL
+                        attempt.state = AttemptState.COMPLETED
             else:
                 attempt.state = AttemptState.INVALID
                 attempt.error = 'No code change after formatting the code'
 
             attempt.write_log()
 
-            if attempt.state == AttemptState.SUCCESSFUL:
+            if attempt.state == AttemptState.COMPLETED:
                 print(f'Completed issue: {issue.key}')
                 return True
 
