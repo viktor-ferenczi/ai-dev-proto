@@ -23,12 +23,14 @@ class Developer:
         self.rng = random.Random()
 
     async def fix_issues(self, branch_name: str):
+        if self.project.has_changes():
+            raise RuntimeError(f'Please make sure there are no changes in your working copy: {self.project.project_dir}')
+
         self.project.ensure_branch(branch_name)
-        self.project.roll_back_changes('.')
 
         self.project.format_code()
         self.project.stage_change('.')
-        if self.project.has_staged_changes():
+        if self.project.has_changes():
             self.project.commit('Formatted code')
 
         self.project.analyze()

@@ -1,7 +1,9 @@
 import os
 
+import toml
 
-class C:
+
+class Config:
     # LLM model name: codellama, deepseek
     # It is used to select the right tokenizer and chat template
     AIDEV_MODEL = os.getenv('AIDEV_MODEL', 'deepseek')
@@ -31,3 +33,22 @@ class C:
         'py': '# TOP_MARKER',
         'cshtml': '<!-- TOP_MARKER -->',
     }
+
+    def load(self, path):
+        with open(path, 'rt', encoding='utf-8') as f:
+            data = toml.load(f)
+            for name in self:
+                if name in data:
+                    setattr(self, name, data[name])
+
+    def __iter__(self):
+        for name in dir(self):
+            if not name.startswith('_') and name == name.upper():
+                yield name
+
+
+CONFIG_PATH = os.path.expanduser('~/aidev.toml')
+
+C = Config()
+if os.path.exists(CONFIG_PATH):
+    C.load(CONFIG_PATH)
