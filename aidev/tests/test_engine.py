@@ -2,17 +2,16 @@
 import os
 import time
 
-from openai import OpenAI, AsyncOpenAI
 import unittest
 
-from aidev.common.config import C
-from aidev.common.async_helpers import AsyncPool
-from aidev.tokenizer import tokenizer
+from aidev.common.async_helpers import map_async, iter_async
+from aidev.engine.engine import Engine
+from aidev.engine.openai_engine import OpenAIEngine
+from aidev.engine.params import GenerationParams
+
+CONTEXT_HEADROOM_TOKENS = 100
 
 SCRIPT_DIR = os.path.dirname(__file__)
-
-TOKENIZER = tokenizer.get_tokenizer(C.AIDEV_MODEL)
-count_tokens = TOKENIZER.count_tokens
 
 
 def load_text(filename: str) -> str:
@@ -20,7 +19,7 @@ def load_text(filename: str) -> str:
         return f.read().replace('\r\n', '\n').replace('\r', '')
 
 
-def crop_text(text: str, max_tokens: int, separator: str = '\n\n') -> str:
+def crop_text(engine: Engine, text: str, max_tokens: int, separator: str = '\n\n') -> str:
     assert max_tokens > 0
     paragraphs = []
     total_tokens = 0
@@ -34,10 +33,10 @@ def crop_text(text: str, max_tokens: int, separator: str = '\n\n') -> str:
         end += len(separator)
         paragraph = text[start:end]
 
-        paragraph_tokens = count_tokens(paragraph)
+        paragraph_tokens = engine.count_tokens(paragraph)
         if separator != '. ' and total_tokens + paragraph_tokens > max_tokens:
-            paragraph = crop_text(paragraph, max_tokens - total_tokens, '. ')
-            paragraph_tokens = count_tokens(paragraph)
+            paragraph = crop_text(engine, paragraph, max_tokens - total_tokens, '. ')
+            paragraph_tokens = engine.count_tokens(paragraph)
             more = False
 
         if total_tokens + paragraph_tokens > max_tokens:
@@ -49,14 +48,14 @@ def crop_text(text: str, max_tokens: int, separator: str = '\n\n') -> str:
         start = end
 
     result = ''.join(paragraphs)
-    assert count_tokens(result) <= max_tokens, (count_tokens(result), max_tokens)
+    assert engine.count_tokens(result) <= max_tokens, (engine.count_tokens(result), max_tokens)
     return result
 
 
-assert crop_text('First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
+assert crop_text(OpenAIEngine(), 'First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
 
-TEST_TEXT = load_text('pg18857.txt')
-TEST_TEXT = TEST_TEXT[TEST_TEXT.find('CHAPTER 1\n'):]
+BOOK = load_text('pg18857.txt')
+BOOK = BOOK[BOOK.find('CHAPTER 1\n'):]
 
 SYSTEM_CODEULATOR = '''\
 MODEL ADOPTS ROLE OF CODEULATOR.
@@ -71,7 +70,7 @@ MODEL ADOPTS ROLE OF CODEULATOR.
 8.[CodeRevAna]: 8a.PeerRev 8b.CdAnalys 8c-CdsOptim 8d.Docs 8e.OOPCdRev
 '''
 
-USER_WRITE_SCRIPT_TO_DEDUPLICATE_FILES = '''\
+INSTRUCTION_DEDUPLICATE_FILES = '''\
 Your task is to write a Python 3 function to identify duplicate files in a folder and return a summary of them.
 
 Requirements:
@@ -203,155 +202,116 @@ QUESTIONS = [
 ]
 
 
-class SyncOpenAITest(unittest.TestCase):
-    max_context = 16384
+class EngineTest(unittest.IsolatedAsyncioTestCase):
 
-    def setUp(self):
-        self.client = OpenAI(
-            base_url=C.AIDEV_OPENAI_BASE_URL,
-            api_key=C.AIDEV_OPENAI_KEY,
-        )
+    async def test_single_completion(self):
+        engine = OpenAIEngine()
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = 'How is an iterative quicksort algorithm implemented?'
+        params = GenerationParams(max_tokens=300)
 
-    def tearDown(self):
-        super().tearDown()
-        self.client.close()
-
-    def test_generation(self):
         started = time.perf_counter()
-        completion = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
-                {"role": "user", "content": 'How is an iterative quicksort algorithm implemented?'}
-            ],
-            model=C.AIDEV_OPENAI_MODEL,
-            max_tokens=2000,
-            temperature=0.2,
-        )
+        completions = await engine.generate(system, instruction, params)
         finished = time.perf_counter()
         duration = finished - started
 
-        self.assertTrue(bool(completion))
-        self.assertEqual(len(completion.choices), 1)
+        self.assertEqual(1, len(completions))
 
-        token_count = completion.usage.completion_tokens
+        completion = completions[0]
+        token_count = engine.count_tokens(completion)
         print(f'Generated {token_count} tokens in {duration:.1f}s ({token_count / duration:.1f} tokens/s)')
-        print(f'Output: {completion.choices[0].message.content}')
+        print(f'Output:\n{completion}')
 
-    def test_multiple(self):
+    async def test_multiple_completions(self):
+        engine = OpenAIEngine()
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = 'How is an iterative quicksort algorithm implemented?'
+        params = GenerationParams(max_tokens=300, number_of_completions=16)
+
         started = time.perf_counter()
-        completion = self.client.chat.completions.create(
-            n=10,
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
-                {"role": "user", "content": 'How is an iterative quicksort algorithm implemented?'}
-            ],
-            model=C.AIDEV_OPENAI_MODEL,
-            max_tokens=2000,
-            temperature=0.7,
-        )
+        completions = await engine.generate(system, instruction, params)
         finished = time.perf_counter()
         duration = finished - started
 
-        self.assertTrue(bool(completion))
-        self.assertEqual(len(completion.choices), 10)
+        self.assertEqual(params.number_of_completions, len(completions))
 
-        token_count = completion.usage.completion_tokens
+        token_count = sum(engine.count_tokens(completion) for completion in completions)
         print(f'Generated {token_count} tokens in {duration:.1f}s ({token_count / duration:.1f} tokens/s)')
-        for i, choice in enumerate(completion.choices):
-            print(f'Output {i}: {choice.message.content}')
+        for index, completion in enumerate(completions):
+            print(f'Output {index}:\n{completion}\n\n')
 
-    def test_coding(self):
+        self.assertTrue(bool(completion.strip()))
+
+    async def test_coding(self):
+        engine = OpenAIEngine()
+        params = GenerationParams(max_tokens=2000)
+
+        print('SYSTEM:')
+        print(SYSTEM_CODEULATOR)
+        print()
+
+        print('INSTRUCTION:')
+        print(INSTRUCTION_DEDUPLICATE_FILES)
+        print()
+
         started = time.perf_counter()
-        completion = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": SYSTEM_CODEULATOR},
-                {"role": "user", "content": USER_WRITE_SCRIPT_TO_DEDUPLICATE_FILES},
-            ],
-            model=C.AIDEV_OPENAI_MODEL,
-            max_tokens=2000,
-            temperature=0.2,
-        )
+        completions = await engine.generate(SYSTEM_CODEULATOR, INSTRUCTION_DEDUPLICATE_FILES, params)
         finished = time.perf_counter()
         duration = finished - started
 
-        self.assertTrue(bool(completion.choices))
+        self.assertEqual(1, len(completions))
 
-        token_count = completion.usage.completion_tokens
+        completion = completions[0]
+        token_count = engine.count_tokens(completion)
         print(f'Generated {token_count} tokens in {duration:.1f}s ({token_count / duration:.1f} tokens/s)')
-        print('Output:')
-        print(completion.choices[0].message.content.lstrip())
+        print(f'COMPLETION:\n{completion}')
 
-    def test_long_context(self):
+        self.assertTrue(bool(completion.strip()))
+
+    async def test_long_context(self):
+        engine = OpenAIEngine()
+
         for size_kb in (1, 2, 4, 8, 16, 32, 64, 128, 256):
             size = size_kb * 1024
-            if size > self.max_context:
+            if size > engine.max_context:
                 break
 
-            text = crop_text(TEST_TEXT, size - 450)
+            params = GenerationParams(max_tokens=400)
+            text = crop_text(engine, BOOK, size - params.max_tokens - CONTEXT_HEADROOM_TOKENS)
+
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
             instruction = f'{text}\n\nPlease summarize the above text in 3 sentences.'
-            print(f'{size_kb}k: {count_tokens(system)} system + {count_tokens(instruction)} instruction + 400 completion')
 
-            completion = self.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": instruction}
-                ],
-                model=C.AIDEV_OPENAI_MODEL,
-                max_tokens=400,
-                temperature=0.7,
-            )
+            system_tokens = engine.count_tokens(system)
+            instruction_tokens = engine.count_tokens(instruction)
 
-            self.assertTrue(bool(completion))
-            self.assertEqual(len(completion.choices), 1)
+            print(f'{size_kb}k: {system_tokens} system + {instruction_tokens} instruction + {params.max_tokens} completion')
+            completions = await engine.generate(system, instruction, params)
+            completion = completions[0]
 
-            self.assertTrue(bool(completion.choices[0].message.content), completion.choices[0].message.content)
-            print(completion.choices[0].message.content)
+            self.assertTrue(bool(completion.strip()))
 
-            token_count = completion.usage.completion_tokens
-            self.assertTrue(token_count > 0, str(token_count))
-            print()
+    async def test_parallel_load(self):
+        engine = OpenAIEngine()
 
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        system_tokens = engine.count_tokens(system)
 
-class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
-    max_parallel_connections = 16
-
-    async def test_generation(self):
-        self.token_count = 0
+        async def generate(instruction: str) -> str:
+            instruction_tokens = engine.count_tokens(instruction)
+            params = GenerationParams(max_tokens=engine.max_context - system_tokens - instruction_tokens - CONTEXT_HEADROOM_TOKENS)
+            completions = await engine.generate(system, instruction, params)
+            return completions[0]
 
         started = time.perf_counter()
-        async with AsyncPool() as pool:
-            for question in QUESTIONS:
-                if pool.task_count < self.max_parallel_connections:
-                    await pool.run(self.generate(question))
-                else:
-                    await pool.wait()
+        outputs = [completions[0] async for completions in map_async(generate, iter_async(QUESTIONS), max_tasks=engine.optimal_parallel_sequences)]
         finished = time.perf_counter()
         duration = finished - started
 
-        print(f'TOTAL: Generated {self.token_count} tokens in {duration:.1f}s ({self.token_count / duration:.1f} tokens/s)')
+        self.assertEqual(len(QUESTIONS), len(outputs))
 
-    async def generate(self, question):
-        client = AsyncOpenAI(
-            base_url=C.AIDEV_OPENAI_BASE_URL,
-            api_key=C.AIDEV_OPENAI_KEY,
-        )
-        try:
-            completion = await client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
-                    {"role": "user", "content": question}
-                ],
-                model=C.AIDEV_OPENAI_MODEL,
-                max_tokens=100,
-                temperature=0.2,
-            )
+        for output in outputs:
+            self.assertTrue(bool(output.strip()))
 
-            self.assertTrue(bool(completion.choices))
-            self.token_count += completion.usage.completion_tokens
-
-            print(f'Question: {question}')
-            print(f'Answer: {completion.choices[0].message.content.lstrip()}')
-            print('-' * 60)
-        finally:
-            await client.close()
+        token_count = sum(engine.count_tokens(output) for output in outputs)
+        print(f'Generated {token_count} tokens in {duration:.1f}s ({token_count / duration:.1f} tokens/s)')

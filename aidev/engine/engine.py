@@ -7,6 +7,7 @@ class Engine:
 
     def __init__(self):
         self.max_context = 16384
+        self.optimal_parallel_sequences = 16
 
     def count_tokens(self, text: str) -> int:
         raise NotImplementedError()
