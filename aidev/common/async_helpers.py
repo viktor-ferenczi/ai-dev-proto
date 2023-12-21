@@ -19,13 +19,13 @@ async def map_async(func: Callable[[Any], Coroutine], iter_args: AsyncIterable[A
     pending: Set[Future] = set()
     try:
         async for arg in iter_args:
-            if max_tasks < 1 or len(pending) < max_tasks:
-                pending.add(asyncio.create_task(func(arg)))
-            else:
+            pending.add(asyncio.create_task(func(arg)))
+            if max_tasks > 0 and len(pending) >= max_tasks:
                 done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
                     yield task.result()
                 del done
+                del task
 
         if pending:
             done, pending = await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
