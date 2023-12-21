@@ -212,6 +212,10 @@ class SyncOpenAITest(unittest.TestCase):
             api_key=C.AIDEV_OPENAI_KEY,
         )
 
+    def tearDown(self):
+        super().tearDown()
+        self.client.close()
+
     def test_generation(self):
         started = time.perf_counter()
         completion = self.client.chat.completions.create(
@@ -283,7 +287,7 @@ class SyncOpenAITest(unittest.TestCase):
             if size > self.max_context:
                 continue
 
-            text = crop_text(TEST_TEXT, size - (size // 32) - 512)
+            text = crop_text(TEST_TEXT, size - 450)
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
             instruction = f'{text}\n\nPlease summarize the above text in 3 sentences.'
             print(f'{size_kb}k: {count_tokens(system)} system + {count_tokens(instruction)} instruction + 400 completion')
@@ -332,20 +336,22 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
             base_url=C.AIDEV_OPENAI_BASE_URL,
             api_key=C.AIDEV_OPENAI_KEY,
         )
+        try:
+            completion = await client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
+                    {"role": "user", "content": question}
+                ],
+                model=C.AIDEV_OPENAI_MODEL,
+                max_tokens=100,
+                temperature=0.2,
+            )
 
-        completion = await client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
-                {"role": "user", "content": question}
-            ],
-            model=C.AIDEV_OPENAI_MODEL,
-            max_tokens=100,
-            temperature=0.2,
-        )
+            self.assertTrue(bool(completion.choices))
+            self.token_count += completion.usage.completion_tokens
 
-        self.assertTrue(bool(completion.choices))
-        self.token_count += completion.usage.completion_tokens
-
-        print(f'Question: {question}')
-        print(f'Answer: {completion.choices[0].message.content.lstrip()}')
-        print('-' * 60)
+            print(f'Question: {question}')
+            print(f'Answer: {completion.choices[0].message.content.lstrip()}')
+            print('-' * 60)
+        finally:
+            await client.close()
