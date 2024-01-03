@@ -3,7 +3,7 @@ import shutil
 
 from .mvc import Controller, Method
 from ..common.config import C
-from ..common.util import get_next_free_numbered_dir, read_text_file, read_text_files, write_text_file, read_text_file_or_default
+from ..common.util import get_next_free_numbered_file, read_text_file, read_text_files, write_text_file, read_text_file_or_default
 from ..engine.params import GenerationParams
 from ..sonar.issue import Issue, TextRange
 from .attempt import Attempt, AttemptState
@@ -119,47 +119,35 @@ This is an EXAMPLE on how to cover a HTTP GET request handler method with a test
 ```
 
 
-Consider the following CONTROLLER from an ASP.NET service based on .NET Core:
+Consider the following CONTROLLER, especially the `{method.name}` METHOD which you will need to test:
 ```cs
 {controller_source}
 ```
 
 
-MODELS you may need to know about in order to understand the CONTROLLER:
+MODELS you may need to know about for better understanding of the CONTROLLER above:
 ```cs
 {models_source}
 ```
 
 
-{view_info}
-
-Source of the VIEW corresponding to the CONTROLLER METHOD or empty code block if there is no view:
-```cshtml
-{view_source}
-```
-
-
-Use the above EXAMPLE as a basis. Modify the example to cover the `{method.name}` 
-request handler method of the `{controller.name}`Controller class with a 
-test fixture in a similar way.
+Based on the above EXAMPLE write a test fixture to cover the above
+`{controller.name}Controller.{method.name}` CONTROLLER METHOD. This method
+is a HTTP request handler, which should be tested by sending HTTP requests
+using the `_webApp.Client` object. These results should be similar to what
+the real Web page would send. 
 
 The name of the test class must be `{controller.name}{method.name}Tests`. 
-
-The actual test methods may differ based on the controller method, 
-make sure to adapt the EXAMPLE appropriately. Remove the validation of
-the output to the reference if there is no corresponding view.
-
+The actual test methods may differ from the EXAMPLE based on the controller method.
 Make sure to pass all required parameters to the CONTROLLER METHOD tested via
 the HTTP request you make via `_webApp.Client`. This is to ensure the method
-is called and it is covered. If the request handler method is not called due
-to GET or POST parameter or form data mismatch then there will be no test coverage.
+is called and it is covered.
  
 Make sure to modify the reference file name (`"HomeIndex.html"`) to match 
-the name of the controller and method tested. This applies only if there
-is a corresponding view to the controller method.
+the name of the controller and method tested.
 
 Write only the authenticated test and omit the publicly accessible one if the data 
-viewed/accessed via the controller method is available only for logged in users.
+accessed via the controller method is available only for logged in users.
 You can have both status and content tests for both the public and authenticated
 user cases, do what is meaningful in the context of the given controller method.
 
@@ -366,7 +354,7 @@ class Junior(Brain):
 
         issue_log_dir = os.path.join(self.project.attempts_dir, f'{issue.key}')
         os.makedirs(issue_log_dir, exist_ok=True)
-        index = get_next_free_numbered_dir(issue_log_dir)
+        index = get_next_free_numbered_file(issue_log_dir)
         for offset, attempt in enumerate(attempts):
             attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
             # attempt.write_log()
@@ -420,13 +408,7 @@ class Junior(Brain):
             raise IOError(f'Missing Tests project: {self.project.tests_project_dir}')
 
         controller_source = read_text_file(controller.path)
-        view_source = read_text_file_or_default(method.view.path, '')
         model_sources = [model.path for model in method.models]
-
-        view_info = (
-            f'There is a view corresponding to this controller method: `{method.view.name}.cshtml`' if view_source
-            else 'There is no view corresponding to this controller method.'
-        )
 
         system = SYSTEM
         instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
@@ -434,9 +416,7 @@ class Junior(Brain):
             method=method,
             example_source=EXAMPLE_HOME_INDEX_TEST.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
-            view_source=view_source,
             models_source='\n\n'.join(read_text_files(model_sources)),
-            view_info=view_info
         )
 
         system_token_count = self.engine.count_tokens(system)
@@ -479,7 +459,7 @@ class Junior(Brain):
 
         issue_log_dir = os.path.join(self.project.attempts_dir, f'{controller.name}Controller.{method.name}')
         os.makedirs(issue_log_dir, exist_ok=True)
-        index = get_next_free_numbered_dir(issue_log_dir)
+        index = get_next_free_numbered_file(issue_log_dir)
         for offset, attempt in enumerate(attempts):
             attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
             # attempt.write_log()

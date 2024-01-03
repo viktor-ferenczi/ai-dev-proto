@@ -4,10 +4,11 @@ import re
 from typing import Iterable
 
 
-def get_next_free_numbered_dir(issue_log_dir: str) -> int:
+def get_next_free_numbered_file(issue_log_dir: str) -> int:
     highest = -1
     for name in os.listdir(issue_log_dir):
-        if name.isdigit():
+        name = name.split('.')[0]
+        if name and name.isdigit():
             highest = max(highest, int(name))
     return highest + 1
 

@@ -157,11 +157,11 @@ class Project:
                     method_signature = e_method.get('signature')
 
                     view = View(name=f'{controller_name}/{method_name}', path=os.path.join(controller_view_dir, f'{method_name}.cshtml'))
-                    view_source = read_text_file(view.path) if os.path.exists(view.path) else ''
-                    view_source = keep_lines(view_source, re.compile(r'^@model\s.*'))
+                    # view_source = read_text_file(view.path) if os.path.exists(view.path) else ''
+                    # view_source = keep_lines(view_source, re.compile(r'^@model\s.*'))
 
                     # FIMXE: Sloppy text based match, use a code map!
-                    models = [model for model in all_models if model.name in controller_source or model.name in view_source]
+                    models = [model for model in all_models if model.name in controller_source]
 
                     method = Method(
                         name=method_name,
