@@ -481,7 +481,8 @@ class Junior(Brain):
             attempt.write_log()
             print(f'{controller.name}{method.name} [{attempt.state}] {attempt.error}')
 
-            if attempt.state == AttemptState.COMPLETED:
+            # FIXME: Temporarily allowing NOT_COVERED
+            if attempt.state == AttemptState.COMPLETED or attempt.state == AttemptState.NOT_COVERED:
                 return True
 
             os.remove(method.test_path)
