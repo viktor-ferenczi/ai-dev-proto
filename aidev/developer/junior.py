@@ -158,6 +158,9 @@ accessed via the controller method is available only for logged in users.
 You can have both status and content tests for both the public and authenticated
 user cases, do what is meaningful in the context of the given controller method.
 
+Before unauthenticated tests always call `_webApp.Logout`. 
+Before authenticated tests always call `await _webApp.LoginAsAdmin`.
+
 Write only the source code for the test fixture in a code block and nothing else.
 If you are unsure or miss some details in the context, then do not write anything.'''
 
@@ -185,7 +188,8 @@ namespace Shop.Tests.Fixtures
             _webApp.Logout();
 
             var response = await _webApp.Client.GetAsync("/");
-            Assert.True(response.IsSuccessStatusCode);
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode, $"[{response.StatusCode}] {content}");
         }
 
         [Fact]
@@ -195,7 +199,7 @@ namespace Shop.Tests.Fixtures
 
             var response = await _webApp.Client.GetAsync("/");
             var content = await response.Content.ReadAsStringAsync();
-            Assert.True(response.IsSuccessStatusCode);
+            Assert.True(response.IsSuccessStatusCode, $"[{response.StatusCode}] {content}");
 
             var normalizedContent = Normalization.NormalizePageContent(content);
 
@@ -211,7 +215,7 @@ namespace Shop.Tests.Fixtures
 
             var response = await _webApp.Client.GetAsync("/");
             var content = await response.Content.ReadAsStringAsync();
-            Assert.True(response.IsSuccessStatusCode);
+            Assert.True(response.IsSuccessStatusCode, $"[{response.StatusCode}] {content}");
 
             var normalizedContent = Normalization.NormalizePageContent(content);
 
