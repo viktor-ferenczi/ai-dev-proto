@@ -37,7 +37,7 @@ The static code analysis found an issue in the original source code:
 {issue_description}
 ```
 
-The issue is reported at these code lines, but it may involve other lines:
+The issue is reported at these code lines:
 ```{doctype}
 {code_lines}
 ```
