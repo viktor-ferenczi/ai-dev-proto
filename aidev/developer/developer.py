@@ -79,12 +79,15 @@ class Developer:
                    and not os.path.exists(method.test_path)
             ]
 
+            if not controller_methods:
+                break
+
             self.rng.shuffle(controller_methods)
 
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await brain.cover_controller_method(controller, method, allow_failure=True):
+                if await brain.cover_controller_method(controller, method, allow_failure=False):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')
