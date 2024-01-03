@@ -11,7 +11,7 @@ from ..sonar.issue import Issue
 class SonarClient:
 
     def __init__(self, project_name: str, token: str = '', base_url: str = ''):
-        self.project_name = project_name
+        self.project_name: str = project_name
         self.token: str = token or C.SONAR_TOKEN
         self.base_url: str = base_url or C.SONAR_BASE_URL
 
@@ -56,7 +56,7 @@ class SonarClient:
 
 
 def test():
-    sonar = SonarClient('Shop', C.SONAR_TOKEN)
+    sonar = SonarClient('Project', C.SONAR_TOKEN)
     issues = sonar.get_issues()
 
     for issue in issues:

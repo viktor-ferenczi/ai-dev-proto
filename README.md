@@ -127,31 +127,6 @@ There is no default value. It is required to set this variable, currently.
 
 Your project must have a script at its top level to run the scanner, currently.
 
-#### Linux
-
-TBD
-
-#### Windows
-
-Create `analyze.bat` in the working copy folder of your target project with
-the following contents: 
-
-```cmd
-@echo off
-dotnet sonarscanner begin /k:"Shop" /d:sonar.token="%SONAR_TOKEN%" || exit /b 1
-dotnet build || exit /b 1
-dotnet sonarscanner end /d:sonar.token="%SONAR_TOKEN%" || exit /b 1
-echo Done
-```
-
-#### Make sure it works
-
-FIXME: It has been tested only on Windows so far.
-FIXME: Remove this requirement, implement these 3 commands in ai-dev instead.
-
-Test the script by running it. It should re-analyze your project and the issues
-must show up on SonarQube's Web UI.
-
 ## Usage
 
 Make sure that the environment variables (see configuration above) are defined

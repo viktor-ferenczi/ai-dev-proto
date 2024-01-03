@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import subprocess
 import sys
 import os
 
@@ -19,7 +18,7 @@ It is planned to have a command like "fix-sonar" in the future.
 ''')
 
     parser.add_argument('-p', '--project', default='.', help='Project directory [default: current directory]')
-    parser.add_argument('-n', '--name', default='Shop', help='SonarQube project name [default: Shop]')
+    parser.add_argument('-n', '--name', default='Project', help='SonarQube project name [default: Project]')
     parser.add_argument('-b', '--branch', default='ai-dev', help='Name of the branch to work in [default: ai-dev]')
 
     return parser
@@ -47,7 +46,7 @@ def main():
     print(f'Project directory: {project_dir}')
     print(f'Branch name: {branch_name}')
 
-    project = Project(project_dir)
+    project = Project(project_name, project_dir)
     sonar = SonarClient(project_name)
     engine = OpenAIEngine()
     developer = Developer(project, sonar, engine)

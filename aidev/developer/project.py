@@ -1,15 +1,18 @@
 import os
 from subprocess import check_output, Popen, STDOUT, PIPE
 
+from aidev.common.config import C
+
 
 class Project:
 
-    def __init__(self, project_dir: str):
-        self.project_dir = project_dir
+    def __init__(self, project_name: str, project_dir: str):
+        self.project_name: str = project_name
+        self.project_dir: str = project_dir
 
-        self.aidev_dir = os.path.join(self.project_dir, ".aidev")
-        self.attempts_dir = os.path.join(self.aidev_dir, "attempts")
-        self.latest_path = os.path.join(self.aidev_dir, "latest.md")
+        self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
+        self.attempts_dir: str = os.path.join(self.aidev_dir, "attempts")
+        self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
 
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.attempts_dir, exist_ok=True)
@@ -32,7 +35,9 @@ class Project:
             raise RuntimeError(error)
 
     def analyze(self):
-        self.must_run_command('analyze project', ['analyze.bat'], shell=True)
+        self.must_run_command('begin analyzing project using SonarScanner', ['dotnet', 'sonarscanner', 'begin', f'/k:{self.project_name}', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
+        self.must_run_command('building the project with analysis enabled', ['dotnet', 'build'], shell=True)
+        self.must_run_command('end analyzing project', ['dotnet', 'sonarscanner', 'end', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
 
     def get_current_branch(self) -> str:
         return check_output(["git", "branch", "--show-current"], cwd=self.project_dir).decode('utf-8').strip()
