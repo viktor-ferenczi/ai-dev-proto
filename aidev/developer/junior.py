@@ -134,7 +134,7 @@ MODELS you may need to know about in order to understand the CONTROLLER:
 {view_info}
 
 Source of the VIEW corresponding to the CONTROLLER METHOD or empty code block if there is no view:
-```cs
+```cshtml
 {view_source}
 ```
 

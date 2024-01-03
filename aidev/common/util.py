@@ -42,12 +42,22 @@ def count_changed_lines(original: str, replacement: str) -> int:
 assert count_changed_lines("\n\n\nline 1\nline 2\n\nline 3\nline 4", "line 1\nline 2 changed\nline 3\nnew line 5") == 4
 
 
+def write_binary_file(path: str, data: bytes):
+    with open(path, 'rb') as f:
+        f.write(data)
+
+
+def read_binary_file(path: str) -> bytes:
+    with open(path, 'rb') as f:
+        return f.read()
+
+
 def write_text_file(path: str, content: str, encoding='utf-8'):
     with open(path, 'wt', encoding=encoding) as f:
         f.write(content)
 
 
-def read_text_file_or_default(path: str, default: str, encoding='utf-8') -> str:
+def read_text_file_or_default(path: str, default: str, encoding='utf-8-sig') -> str:
     if not os.path.exists(path):
         return default
 
@@ -55,12 +65,12 @@ def read_text_file_or_default(path: str, default: str, encoding='utf-8') -> str:
         return f.read()
 
 
-def read_text_file(path: str, encoding='utf-8') -> str:
+def read_text_file(path: str, encoding='utf-8-sig') -> str:
     with open(path, 'rt', encoding=encoding) as f:
         return f.read()
 
 
-def read_text_files(paths: list[str], encoding='utf-8') -> Iterable[str]:
+def read_text_files(paths: list[str], encoding='utf-8-sig') -> Iterable[str]:
     for path in paths:
         yield read_text_file(path, encoding)
 

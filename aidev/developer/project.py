@@ -6,7 +6,7 @@ from lxml import etree
 
 from .mvc import Controller, Model, Method, Coverage, View
 from ..common.config import C
-from ..common.util import read_text_file, iter_tree, remove_lines, keep_lines
+from ..common.util import read_text_file, iter_tree, remove_lines, keep_lines, read_binary_file
 
 
 class Project:
@@ -104,8 +104,7 @@ class Project:
     def find_controllers(self) -> Iterable[Controller]:
         print('Finding controllers and their dependencies')
         coverage_path = os.path.join(self.project_dir, 'coverage.xml')
-        coverage = read_text_file(coverage_path)
-        tree = etree.fromstring(coverage)
+        tree = etree.fromstring(read_binary_file(coverage_path))
 
         web_server_dir = ''
         all_models: list[Model] = []
@@ -185,8 +184,7 @@ class Project:
 
     def is_covered(self, controller: Controller, method: Method) -> bool:
         coverage_path = os.path.join(self.project_dir, 'coverage.xml')
-        coverage = read_text_file(coverage_path)
-        tree = etree.fromstring(coverage)
+        tree = etree.fromstring(read_binary_file(coverage_path))
 
         for e_package in tree.xpath('.//package'):
             for e_class in e_package.xpath('.//class'):
