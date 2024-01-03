@@ -146,6 +146,12 @@ class Project:
                     if not method_name or not method_name[0].isalnum():
                         continue
 
+                    # FIXME: Use a code map instead to verify whether this method is a request handler (return value or attributes)
+                    pattern = rf'(public|protected|private)\s+IActionResult\s+{method_name}\s*\(.*?\)\s*$'
+                    async_pattern = rf'(public|protected|private)\s+async\s+Task<IActionResult>\s+{method_name}\s*\(.*?\)\s*$'
+                    if (not re.search(pattern, controller_source, re.DOTALL | re.MULTILINE) and not re.search(async_pattern, controller_source, re.DOTALL | re.MULTILINE)):
+                        continue
+
                     method_signature = e_method.get('signature')
 
                     view = View(name=f'{controller_name}/{method_name}', path=os.path.join(controller_view_dir, f'{method_name}.cshtml'))
