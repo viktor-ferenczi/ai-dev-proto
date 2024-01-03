@@ -1,5 +1,6 @@
 import os.path
 import shutil
+from typing import Dict
 
 from .mvc import Controller, Method
 from ..common.config import C
@@ -128,6 +129,12 @@ Consider the following CONTROLLER, especially the `{method.name}` METHOD which y
 MODELS you may need to know about for better understanding of the CONTROLLER above:
 ```cs
 {models_source}
+```
+
+
+Valid database IDs to use in the request parameters by table name:
+```
+{formatted_db_ids}
 ```
 
 
@@ -401,7 +408,7 @@ class Junior(Brain):
     def revert_code_change(self, attempt):
         write_text_file(attempt.path, attempt.original)
 
-    async def cover_controller_method(self, controller: Controller, method: Method, *, allow_failure=False, temperature: float = 0.3):
+    async def cover_controller_method(self, controller: Controller, method: Method, db_ids: Dict[str, list[int]], *, allow_failure=False, temperature: float = 0.3):
         print(f'Adding test fixture for {controller.name}Controller.{method.name}')
 
         if not os.path.isdir(self.project.tests_project_dir):
@@ -410,6 +417,8 @@ class Junior(Brain):
         controller_source = read_text_file(controller.path)
         model_sources = [model.path for model in method.models]
 
+        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
+
         system = SYSTEM
         instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
             controller=controller,
@@ -417,6 +426,7 @@ class Junior(Brain):
             example_source=EXAMPLE_HOME_INDEX_TEST.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
             models_source='\n\n'.join(read_text_files(model_sources)),
+            formatted_db_ids=formatted_db_ids,
         )
 
         system_token_count = self.engine.count_tokens(system)

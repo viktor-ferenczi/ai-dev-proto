@@ -3,6 +3,7 @@ import random
 from typing import Iterable, Tuple
 
 from .mvc import Controller, Method
+from ..common.dbdump import DatabaseDumper
 from ..developer.junior import Junior
 from ..developer.project import Project
 from ..engine.engine import Engine
@@ -66,6 +67,22 @@ class Developer:
 
         self.prepare_working_copy(branch_name)
 
+        self.project.test()
+        dbpath = self.project.find('FoodShop.Test.db')
+        assert dbpath, 'Test database not found'
+        dumper = DatabaseDumper(dbpath)
+        table_names = (
+            'Categories',
+            'Foods',
+            'OrderDetails',
+            'Orders',
+            'ShoppingCartItems',
+        )
+        db_ids = {
+            table_name: [row[0] for row in dumper.iter_rows(table_name)]
+            for table_name in table_names
+        }
+
         brain = Junior(self.project, self.engine)
 
         remaining = 0
@@ -101,7 +118,7 @@ class Developer:
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await brain.cover_controller_method(controller, method, temperature=temperature, allow_failure=False):
+                if await brain.cover_controller_method(controller, method, db_ids, temperature=temperature, allow_failure=False):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')

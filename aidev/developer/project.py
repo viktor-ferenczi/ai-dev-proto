@@ -23,6 +23,8 @@ class Project:
         self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
         self.tests_project_path = os.path.join(self.tests_project_dir, f'{project_name}.Tests.csproj')
 
+        self.sqlite_db_path = os.path.join(self.tests_project_dir, 'FoodShip.Test.db')
+
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.attempts_dir, exist_ok=True)
 
@@ -207,3 +209,9 @@ class Project:
                         return coverage.branch_rate == 1.0
 
         raise ValueError(f'Cannot find method in coverage data: {controller.name}Controller.{method.name}')
+
+    def find(self, filename: str) -> str:
+        for path in iter_tree(self.project_dir):
+            if path.endswith(f'{os.path.sep}{filename}'):
+                return path
+        return ''
