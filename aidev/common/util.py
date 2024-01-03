@@ -69,14 +69,3 @@ def keep_lines(text: str, rx: re.Pattern, separator='\n') -> str:
 
 def remove_lines(text: str, rx: re.Pattern, separator='\n') -> str:
     return '\n'.join(line for line in text.split(separator) if rx.match(line) is None)
-
-
-def add_file_to_csproj(csproj_path: str, source_path: str):
-    assert os.path.exists(csproj_path)
-    assert os.path.exists(source_path)
-
-    assert csproj_path.endswith('.csproj')
-    assert source_path.endswith('.cs')
-
-    project_dir = os.path.dirname(csproj_path)
-    raise NotImplementedError()

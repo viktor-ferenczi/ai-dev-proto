@@ -448,8 +448,6 @@ class Junior(Brain):
             assert not os.path.exists(method.test_path), f'Class {controller.name}{method.name}Tests already exists: {method.test_path}'
             write_text_file(method.test_path, attempt.replacement)
 
-            # add_file_to_csproj(self.project.tests_project_path, method.test_path)
-
             def build_and_test():
 
                 error = self.project.build()
@@ -486,7 +484,6 @@ class Junior(Brain):
             if attempt.state == AttemptState.COMPLETED:
                 return True
 
-            # self.project.roll_back_changes(self.project.tests_project_path)
             os.remove(method.test_path)
 
             if os.path.exists(method.output_path):
