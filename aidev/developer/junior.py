@@ -3,7 +3,7 @@ import shutil
 
 from .mvc import Controller, Method
 from ..common.config import C
-from ..common.util import get_next_free_numbered_dir, read_text_file, read_text_files, write_text_file
+from ..common.util import get_next_free_numbered_dir, read_text_file, read_text_files, write_text_file, read_text_file_or_default
 from ..engine.params import GenerationParams
 from ..sonar.issue import Issue, TextRange
 from .attempt import Attempt, AttemptState
@@ -133,6 +133,11 @@ MODELS you may need to know about in order to understand the CONTROLLER:
 
 {view_info}
 
+Source of the VIEW corresponding to the CONTROLLER METHOD or empty code block if there is no view:
+```cs
+{view_source}
+```
+
 
 Use the above EXAMPLE as a basis. Modify the example to cover the `{method.name}` 
 request handler method of the `{controller.name}`Controller class with a 
@@ -143,6 +148,11 @@ The name of the test class must be `{controller.name}{method.name}Tests`.
 The actual test methods may differ based on the controller method, 
 make sure to adapt the EXAMPLE appropriately. Remove the validation of
 the output to the reference if there is no corresponding view.
+
+Make sure to pass all required parameters to the CONTROLLER METHOD tested via
+the HTTP request you make via `_webApp.Client`. This is to ensure the method
+is called and it is covered. If the request handler method is not called due
+to GET or POST parameter or form data mismatch then there will be no test coverage.
  
 Make sure to modify the reference file name (`"HomeIndex.html"`) to match 
 the name of the controller and method tested. This applies only if there
@@ -403,14 +413,20 @@ class Junior(Brain):
     def revert_code_change(self, attempt):
         write_text_file(attempt.path, attempt.original)
 
-    async def cover_controller_method(self, controller: Controller, method: Method):
+    async def cover_controller_method(self, controller: Controller, method: Method, *, allow_failure=False):
         print(f'Adding test fixture for {controller.name}Controller.{method.name}')
 
         if not os.path.isdir(self.project.tests_project_dir):
             raise IOError(f'Missing Tests project: {self.project.tests_project_dir}')
 
         controller_source = read_text_file(controller.path)
+        view_source = read_text_file_or_default(method.view)
         model_sources = [model.path for model in method.models]
+
+        view_info = (
+            f'There is a view corresponding to this controller method: `{method.view.name}.cshtml`' if view_source
+            else 'There is no view corresponding to this controller method.'
+        )
 
         system = SYSTEM
         instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
@@ -418,8 +434,9 @@ class Junior(Brain):
             method=method,
             example_source=EXAMPLE_HOME_INDEX_TEST.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
+            view_source=view_source,
             models_source='\n\n'.join(read_text_files(model_sources)),
-            view_info=f'There is a view corresponding to this controller method: `{method.view.name}.cshtml`' if os.path.exists(method.view.path) else 'There is no view corresponding to this controller method.'
+            view_info=view_info
         )
 
         system_token_count = self.engine.count_tokens(system)
@@ -497,12 +514,14 @@ class Junior(Brain):
                 if error:
                     attempt.state = AttemptState.TEST_FAILED
                     attempt.error = error
-                    # return
+                    return
 
                 if not self.project.is_covered(controller, method):
                     attempt.state = AttemptState.NOT_COVERED
                     attempt.error = error
                     return
+
+                # FIXME: Verify that the output of the fixture is reasonable
 
                 attempt.state = AttemptState.COMPLETED
 
@@ -510,8 +529,11 @@ class Junior(Brain):
             attempt.write_log()
             print(f'{controller.name}{method.name} [{attempt.state}] {attempt.error}')
 
-            # FIXME: Temporarily allowing NOT_COVERED and TEST_FAILED
-            if attempt.state in (AttemptState.COMPLETED, AttemptState.NOT_COVERED, AttemptState.TEST_FAILED):
+            # The allow_failure=True mode is helpful to debug the prompts by looking at broken/incomplete test code
+            if allow_failure and attempt.state in (AttemptState.TEST_FAILED, AttemptState.NOT_COVERED):
+                return True
+
+            if attempt.state == AttemptState.COMPLETED:
                 return True
 
             os.remove(method.test_path)
@@ -523,10 +545,3 @@ class Junior(Brain):
                 os.remove(method.reference_path)
 
         return False
-
-        # Generate those fixtures one by one, give the HomeIndexTests as 1-shot example
-        # Build and run the test case
-        # Verify that the output of the fixture is reasonable
-        # Record the output as reference
-        # Run the test again, make sure it passes
-        # Commit the test

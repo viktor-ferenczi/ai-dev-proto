@@ -47,6 +47,14 @@ def write_text_file(path: str, content: str, encoding='utf-8'):
         f.write(content)
 
 
+def read_text_file_or_default(path: str, default: str, encoding='utf-8') -> str:
+    if not os.path.exists(path):
+        return default
+
+    with open(path, 'rt', encoding=encoding) as f:
+        return f.read()
+
+
 def read_text_file(path: str, encoding='utf-8') -> str:
     with open(path, 'rt', encoding=encoding) as f:
         return f.read()
