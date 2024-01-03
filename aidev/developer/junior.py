@@ -413,7 +413,7 @@ class Junior(Brain):
     def revert_code_change(self, attempt):
         write_text_file(attempt.path, attempt.original)
 
-    async def cover_controller_method(self, controller: Controller, method: Method, *, allow_failure=False):
+    async def cover_controller_method(self, controller: Controller, method: Method, *, allow_failure=False, temperature: float = 0.3):
         print(f'Adding test fixture for {controller.name}Controller.{method.name}')
 
         if not os.path.isdir(self.project.tests_project_dir):
@@ -447,7 +447,7 @@ class Junior(Brain):
         params = GenerationParams(
             number_of_completions=8,
             max_tokens=max_tokens_to_generate,
-            temperature=0.3,
+            temperature=temperature,
         )
 
         completions = await self.engine.generate(system, instruction, params)

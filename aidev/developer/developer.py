@@ -70,7 +70,8 @@ class Developer:
 
         remaining = 0
 
-        for _ in range(max_attempts):
+        for attempt_index in range(max_attempts):
+            temperature = 0.2 + (0.8 - 0.2) * attempt_index / max_attempts
 
             self.project.test_coverage()
 
@@ -100,7 +101,7 @@ class Developer:
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await brain.cover_controller_method(controller, method, allow_failure=False):
+                if await brain.cover_controller_method(controller, method, temperature=temperature, allow_failure=False):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')
