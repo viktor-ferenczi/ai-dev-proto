@@ -369,7 +369,7 @@ class Junior(Brain):
         index = get_next_free_numbered_dir(issue_log_dir)
         for offset, attempt in enumerate(attempts):
             attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
-            attempt.write_log()
+            # attempt.write_log()
 
         for attempt in attempts:
             if attempt.state != AttemptState.GENERATED:
@@ -482,7 +482,7 @@ class Junior(Brain):
         index = get_next_free_numbered_dir(issue_log_dir)
         for offset, attempt in enumerate(attempts):
             attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
-            attempt.write_log()
+            # attempt.write_log()
 
         for attempt in attempts:
             if attempt.state != AttemptState.GENERATED:
