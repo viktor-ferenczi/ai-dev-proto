@@ -12,28 +12,39 @@ from aidev.sonar.client import SonarClient
 
 class ArgParser(argparse.ArgumentParser):
 
-    def __init__(self):
-        super().__init__(description='AI Developer CLI')
+    def __init__(self, add_subparsers=True, **kwargs):
+        super().__init__(description='AI Developer CLI', **kwargs)
+        self.subparsers = None
 
-        # Common arguments
-        self.add_argument('-v', '--verbose', action='count', default=0, help='Verbose logging')
-        self.add_argument('-c', '--config', help='Path to the global configuration file [~/.aidev/config.toml]')
-        self.add_argument('-p', '--project', default='.', help='Project directory [current directory]')
-        self.add_argument('-n', '--name', default='Project', help='Name of the project [default: Project]')
-        self.add_argument('-b', '--branch', default='ai-dev', help='Name of the Git branch to commit to [default: ai-dev]')
+        if add_subparsers:
+            # Common arguments
+            self.add_argument('-v', '--verbose', action='count', default=0, help='Verbose logging')
+            self.add_argument('-c', '--config', help='Path to the global configuration file [~/.aidev/config.toml]')
+            self.add_argument('-p', '--project', default='.', help='Project directory [current directory]')
+            self.add_argument('-n', '--name', default='Project', help='Name of the project [default: Project]')
+            self.add_argument('-b', '--branch', default='ai-dev', help='Name of the Git branch to commit to [default: ai-dev]')
 
-        # Subcommands
-        self.subparsers = self.add_subparsers(dest='command', help='Subcommand')
-        self.subparsers.required = True
+            # Subcommands
+            self.subparsers = self.add_subparsers(dest='command', help='Subcommand')
+            self.subparsers.required = True
 
-        # Add 'fix' command
-        fix = self.fix = self.subparsers.add_parser('fix', help='Fix issues')
-        fix.add_argument('-s', '--source', default='sonar', help='Source of the issues to process [sonar]')
+            fix_parser = self.subparsers.add_parser('fix', help='Fix issues', add_subparsers=False)
+            fix_parser.add_argument('-s', '--source', default='sonar', choices=['sonar'], help='Source of the issues to process [sonar]')
 
-    # def format_help(self):
-    #     common = super().format_help()
-    #     fix = f'fix\n{self.fix.format_help()}'
-    #     return f'{common}\n{fix}'
+            test_parser = self.subparsers.add_parser('test', help='Improve test coverage', add_subparsers=False)
+            # test_parser.add_argument('-u', '--unit', action='store_true', help='Create unit tests')
+            # test_parser.add_argument('-f', '--fixture', action='store_true', help='Create test fixtures')
+
+    def format_help(self):
+        subcommand_helps = [super().format_help()]
+
+        if self.subparsers:
+            for name, subparser in self.subparsers.choices.items():
+                subcommand_helps.append(f"{subparser.format_usage()[len('usage: '):].strip().replace('[-h] ', '', 1)}")
+                subcommand_helps.append('  ' + subparser.format_help().partition('show this help message and exit\n')[2].strip())
+                subcommand_helps.append('')
+
+        return '\n'.join(subcommand_helps)
 
 
 def main(argv: Optional[list[str]] = None):
@@ -77,14 +88,18 @@ def main(argv: Optional[list[str]] = None):
 
 
 def command_fix(project: Project, branch: str, source: str):
-    if source != 'sonar':
-        print(f'Unknown issue source: {source}', file=sys.stderr)
-        sys.exit(1)
-
+    assert source == 'sonar', source
     sonar = SonarClient(project.project_name)
     engine = OpenAIEngine()
     developer = Developer(project, sonar, engine)
     asyncio.run(developer.fix_issues(branch))
+
+
+def command_test(project: Project, branch: str):  # , unit: bool, fixture: bool
+    sonar = SonarClient(project.project_name)
+    engine = OpenAIEngine()
+    developer = Developer(project, sonar, engine)
+    asyncio.run(developer.create_test_fixture(branch))
 
 
 COMMANDS = {

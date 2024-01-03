@@ -51,3 +51,6 @@ class Developer:
 
     def query_open_issues(self):
         self.issues = [issue for issue in self.sonar.get_issues() if issue.status == IssueStatus.OPEN]
+
+    async def create_test_fixture(self, branch_name: str):
+        pass
