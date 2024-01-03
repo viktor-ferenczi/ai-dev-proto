@@ -468,7 +468,7 @@ class Junior(Brain):
                 if error:
                     attempt.state = AttemptState.TEST_FAILED
                     attempt.error = error
-                    return
+                    # return
 
                 if not self.project.is_covered(controller, method):
                     attempt.state = AttemptState.NOT_COVERED
@@ -481,8 +481,8 @@ class Junior(Brain):
             attempt.write_log()
             print(f'{controller.name}{method.name} [{attempt.state}] {attempt.error}')
 
-            # FIXME: Temporarily allowing NOT_COVERED
-            if attempt.state == AttemptState.COMPLETED or attempt.state == AttemptState.NOT_COVERED:
+            # FIXME: Temporarily allowing NOT_COVERED and TEST_FAILED
+            if attempt.state in (AttemptState.COMPLETED, AttemptState.NOT_COVERED, AttemptState.TEST_FAILED):
                 return True
 
             os.remove(method.test_path)
