@@ -6,16 +6,21 @@ from aidev.common.config import C
 
 class Project:
 
-    def __init__(self, project_name: str, project_dir: str):
-        self.project_name: str = project_name
+    def __init__(self, project_dir: str, project_name: str):
         self.project_dir: str = project_dir
+        self.project_name: str = project_name
 
+        self.config_path: str = os.path.join(self.project_dir, 'aidev.toml')
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
         self.attempts_dir: str = os.path.join(self.aidev_dir, "attempts")
         self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
 
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.attempts_dir, exist_ok=True)
+
+    def load_config(self):
+        if os.path.exists(self.config_path):
+            C.load(self.config_path)
 
     def run_command(self, action: str, command: list[str], *, shell=False) -> (int, str):
         print(f'Command to {action}: {" ".join(command)}')
@@ -65,7 +70,7 @@ class Project:
     def stage_change(self, path: str):
         self.must_run_command('stage change', ["git", "add", path])
 
-    def has_staged_changes(self) -> bool:
+    def has_changes(self) -> bool:
         _, output = self.run_command('check staged changes', ['git', 'status'])
         return 'nothing to commit, working tree clean' not in output
 
