@@ -1,8 +1,6 @@
-import asyncio
-import itertools
 import os
 import random
-from typing import Iterable
+from typing import Iterable, Tuple
 
 from .mvc import Controller, Method
 from ..developer.junior import Junior
@@ -80,18 +78,22 @@ class Developer:
                 controller for controller in self.project.find_controllers()
             )
 
-            def iter_methods() -> Iterable[Method]:
+            def iter_methods() -> Iterable[Tuple[Controller, Method]]:
                 for controller in iter_controllers:
-                    yield from controller.methods
+                    for method in controller.methods:
+                        yield (controller, method)
 
-            controller_methods = [
-                method for method in iter_methods()
+            controller_methods: list[Tuple[Controller, Method]] = [
+                (controller, method)
+                for controller, method in iter_methods()
                 if method.coverage.branch_rate == 0
                    and not os.path.exists(method.test_path)
             ]
 
             if not controller_methods:
                 break
+
+            print(f'Methods remaining to cover: {len(controller_methods)}')
 
             self.rng.shuffle(controller_methods)
 

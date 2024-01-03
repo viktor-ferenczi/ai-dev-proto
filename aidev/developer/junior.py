@@ -420,7 +420,7 @@ class Junior(Brain):
             raise IOError(f'Missing Tests project: {self.project.tests_project_dir}')
 
         controller_source = read_text_file(controller.path)
-        view_source = read_text_file_or_default(method.view)
+        view_source = read_text_file_or_default(method.view.path, '')
         model_sources = [model.path for model in method.models]
 
         view_info = (
@@ -527,7 +527,7 @@ class Junior(Brain):
 
             build_and_test()
             attempt.write_log()
-            print(f'{controller.name}{method.name} [{attempt.state}] {attempt.error}')
+            print(f'{controller.name}Controller.{method.name} [{attempt.state}] {attempt.error}')
 
             # The allow_failure=True mode is helpful to debug the prompts by looking at broken/incomplete test code
             if allow_failure and attempt.state in (AttemptState.TEST_FAILED, AttemptState.NOT_COVERED):
