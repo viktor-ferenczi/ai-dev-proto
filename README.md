@@ -113,19 +113,29 @@ Generate a **User** token.
 
 ##### Linux
 
-`export SONAR_TOKEN="squ_..."`
+```sh
+export SONAR_TOKEN="squ_..."
+```
 
 ##### Windows
 
-`set SONAR_TOKEN=squ_...` or add it in the Control Panel.
+Add the `SONAR_TOKEN` environment variable in Control Panel or `set SONAR_TOKEN=squ_...` before running ai-dev.
 
-There is no default value. It is required to set this variable, currently.
+There is no default value. It is required to set this variable in order to use SonarScanner.
 
 ### Analyzer
 
 [Install SonarQube Scanner tool into your project](https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner-for-dotnet/)
 
 Your project must have a script at its top level to run the scanner, currently.
+
+### Code coverage
+
+```sh
+dotnet tool install --global dotnet-coverage
+```
+
+See [dotnet-coverage](https://learn.microsoft.com/en-us/dotnet/core/additional-tools/dotnet-coverage)
 
 ## Usage
 

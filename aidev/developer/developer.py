@@ -51,13 +51,13 @@ class Developer:
         print('No more issues to fix.')
 
     async def create_test_fixture(self, branch_name: str):
-        await self.prepare_working_copy(branch_name)
-
-        self.project.analyze()
+        self.prepare_working_copy(branch_name)
 
         brain = Junior(self.project, self.engine)
 
         # Run test coverage analysis
+        self.project.test_coverage()
+
         # Identify the views not covered yet
         # For each uncovered view:
         ## Identify possible HTTP requests to cover with test fixtures, feed controllers+model+view

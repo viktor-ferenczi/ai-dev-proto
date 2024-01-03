@@ -96,14 +96,15 @@ def command_fix(project: Project, branch: str, source: str):
 
 
 def command_test(project: Project, branch: str):  # , unit: bool, fixture: bool
-    sonar = SonarClient(project.project_name)
     engine = OpenAIEngine()
-    developer = Developer(project, sonar, engine)
+    # FIXME: Refactor the code to allow for working without sonar
+    developer = Developer(project, None, engine)
     asyncio.run(developer.create_test_fixture(branch))
 
 
 COMMANDS = {
     'fix': command_fix,
+    'test': command_test,
 }
 
 if __name__ == '__main__':
