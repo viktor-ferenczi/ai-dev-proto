@@ -28,6 +28,7 @@ class View(BaseModel):
 
 class Method(BaseModel):
     name: str
+    signature: str
     view: View
     models: list[Model]
     coverage: Coverage

@@ -4,6 +4,7 @@ import sys
 import os
 from typing import Optional
 
+from aidev.common.config import C
 from aidev.developer.developer import Developer
 from aidev.developer.project import Project
 from aidev.engine.openai_engine import OpenAIEngine
@@ -19,10 +20,10 @@ class ArgParser(argparse.ArgumentParser):
         if add_subparsers:
             # Common arguments
             self.add_argument('-v', '--verbose', action='count', default=0, help='Verbose logging')
-            self.add_argument('-c', '--config', help='Path to the global configuration file [~/.aidev/config.toml]')
-            self.add_argument('-p', '--project', default='.', help='Project directory [current directory]')
-            self.add_argument('-n', '--name', default='Project', help='Name of the project [default: Project]')
-            self.add_argument('-b', '--branch', default='ai-dev', help='Name of the Git branch to commit to [default: ai-dev]')
+            self.add_argument('-c', '--config', default='', help='Path to the global configuration file [~/.aidev/config.toml]')
+            self.add_argument('-p', '--project', default='', help='Project directory [current directory]')
+            self.add_argument('-n', '--name', default='', help='Name of the project [Project]')
+            self.add_argument('-b', '--branch', default='', help='Name of the Git branch to commit to [aidev]')
 
             # Subcommands
             self.subparsers = self.add_subparsers(dest='command', help='Subcommand')
@@ -63,9 +64,20 @@ def main(argv: Optional[list[str]] = None):
         print(f'Unknown command: {command}', file=sys.stderr)
         sys.exit(1)
 
-    project_dir = args.project
-    project_name = args.name
-    branch = args.branch
+    config_path = args.config
+    if config_path:
+        if not os.path.exists(config_path):
+            raise IOError(f'Missing configuration file: {config_path}')
+        C.load(config_path)
+
+    project_dir = args.project or C.PROJECT_DIR or '.'
+
+    project_config_path = os.path.join(project_dir, '.aidev', 'config.toml')
+    if os.path.exists(project_config_path):
+        C.load(project_config_path)
+
+    project_name = args.name or C.PROJECT_NAME or 'Project'
+    branch = args.branch or C.PROJECT_BRANCH or 'aidev'
 
     if not os.path.isdir(project_dir):
         print(f'The path "{project_dir}" is not a valid directory.', file=sys.stderr)

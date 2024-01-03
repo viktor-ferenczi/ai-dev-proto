@@ -123,6 +123,37 @@ Add the `SONAR_TOKEN` environment variable in Control Panel or `set SONAR_TOKEN=
 
 There is no default value. It is required to set this variable in order to use SonarScanner.
 
+### Configuration files
+
+There is a configuration hierarchy:
+1. Environment variables (user or system level)
+2. User level configuration file
+3. Project level configuration file
+4. Command line arguments
+
+Values defined at a higher number above take precedence.
+
+#### User level
+
+User level configuration folder:
+- Linux/Mac/UNIX: `~/.aidev`
+- Windows: `%HOMEPATH%\.aidev`
+
+1. Run `aidev` once. It will create the above folder and a `default.toml` with the
+   default values in them (any overrides in environment variables already apply).
+2. Copy `default.toml` as `config.toml` in the same folder. 
+3. Customize the settings as needed. It is suggested to remove or comment out (`#`)
+   the ones you want to keep at their default value.
+
+#### Project level
+
+1. Create an `.aidev` subdirectory in your Git working copy folder.
+2. Copy the user level `default.toml` as `config.toml` in the same folder.
+3. Customize the settings as needed, remove those which you want to keep at their defaults.
+
+It is suggested to override `PROJECT_NAME` here to match the SonarQube project name
+and the naming of the C# projects inside the solution.
+
 ### Analyzer
 
 [Install SonarQube Scanner tool into your project](https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner-for-dotnet/)

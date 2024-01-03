@@ -5,8 +5,8 @@ from openai import OpenAI
 from aidev.common.config import C
 
 client = OpenAI(
-    base_url=C.AIDEV_OPENAI_BASE_URL,
-    api_key=C.AIDEV_OPENAI_KEY,
+    base_url=C.OPENAI_BASE_URL,
+    api_key=C.OPENAI_KEY,
 )
 
 started = time.perf_counter()
@@ -15,7 +15,7 @@ completion = client.chat.completions.create(
         {"role": "system", "content": "You are a helpful AI coding assistant. You give concise answers."},
         {"role": "user", "content": 'How is an iterative quicksort algorithm implemented?'}
     ],
-    model=C.AIDEV_OPENAI_MODEL,
+    model=C.OPENAI_MODEL,
     max_tokens=1000,
     temperature=0.2,
 )

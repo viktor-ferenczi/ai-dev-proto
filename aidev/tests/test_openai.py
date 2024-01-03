@@ -11,7 +11,7 @@ from aidev.tokenizer import tokenizer
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
-TOKENIZER = tokenizer.get_tokenizer(C.AIDEV_MODEL)
+TOKENIZER = tokenizer.get_tokenizer(C.MODEL)
 count_tokens = TOKENIZER.count_tokens
 
 
@@ -208,8 +208,8 @@ class SyncOpenAITest(unittest.TestCase):
 
     def setUp(self):
         self.client = OpenAI(
-            base_url=C.AIDEV_OPENAI_BASE_URL,
-            api_key=C.AIDEV_OPENAI_KEY,
+            base_url=C.OPENAI_BASE_URL,
+            api_key=C.OPENAI_KEY,
         )
 
     def tearDown(self):
@@ -223,7 +223,7 @@ class SyncOpenAITest(unittest.TestCase):
                 {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
                 {"role": "user", "content": 'How is an iterative quicksort algorithm implemented?'}
             ],
-            model=C.AIDEV_OPENAI_MODEL,
+            model=C.OPENAI_MODEL,
             max_tokens=2000,
             temperature=0.2,
         )
@@ -245,7 +245,7 @@ class SyncOpenAITest(unittest.TestCase):
                 {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
                 {"role": "user", "content": 'How is an iterative quicksort algorithm implemented?'}
             ],
-            model=C.AIDEV_OPENAI_MODEL,
+            model=C.OPENAI_MODEL,
             max_tokens=2000,
             temperature=0.7,
         )
@@ -267,7 +267,7 @@ class SyncOpenAITest(unittest.TestCase):
                 {"role": "system", "content": SYSTEM_CODEULATOR},
                 {"role": "user", "content": USER_WRITE_SCRIPT_TO_DEDUPLICATE_FILES},
             ],
-            model=C.AIDEV_OPENAI_MODEL,
+            model=C.OPENAI_MODEL,
             max_tokens=2000,
             temperature=0.2,
         )
@@ -297,7 +297,7 @@ class SyncOpenAITest(unittest.TestCase):
                     {"role": "system", "content": system},
                     {"role": "user", "content": instruction}
                 ],
-                model=C.AIDEV_OPENAI_MODEL,
+                model=C.OPENAI_MODEL,
                 max_tokens=400,
                 temperature=0.7,
             )
@@ -333,8 +333,8 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
 
     async def generate(self, question):
         client = AsyncOpenAI(
-            base_url=C.AIDEV_OPENAI_BASE_URL,
-            api_key=C.AIDEV_OPENAI_KEY,
+            base_url=C.OPENAI_BASE_URL,
+            api_key=C.OPENAI_KEY,
         )
         try:
             completion = await client.chat.completions.create(
@@ -342,7 +342,7 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
                     {"role": "system", "content": "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."},
                     {"role": "user", "content": question}
                 ],
-                model=C.AIDEV_OPENAI_MODEL,
+                model=C.OPENAI_MODEL,
                 max_tokens=100,
                 temperature=0.2,
             )

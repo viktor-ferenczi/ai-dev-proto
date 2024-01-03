@@ -142,6 +142,8 @@ class Project:
                     if not method_name or not method_name[0].isalnum():
                         continue
 
+                    method_signature = e_method.get('signature')
+
                     view = View(name=f'{controller_name}/{method_name}', path=os.path.join(controller_view_dir, f'{method_name}.cshtml'))
                     view_source = read_text_file(view.path) if os.path.exists(view.path) else ''
                     view_source = keep_lines(view_source, re.compile(r'^@model\s.*'))
@@ -151,12 +153,13 @@ class Project:
 
                     method = Method(
                         name=method_name,
+                        signature=method_signature,
                         view=view,
                         models=models,
                         coverage=Coverage.from_element(e_method),
-                        test_path=os.path.join(tests_project_dir, 'Fixtures', f'{controller_name}{method_name}Tests.cs'),
-                        output_path=os.path.join(tests_project_dir, 'Output', 'Actual', f'{controller_name}{method_name}.html'),
-                        reference_path=os.path.join(tests_project_dir, 'Output', 'Reference', f'{controller_name}{method_name}.html'),
+                        test_path=os.path.join(self.tests_project_dir, 'Fixtures', f'{controller_name}{method_name}Tests.cs'),
+                        output_path=os.path.join(self.tests_project_dir, 'Output', 'Actual', f'{controller_name}{method_name}.html'),
+                        reference_path=os.path.join(self.tests_project_dir, 'Output', 'Reference', f'{controller_name}{method_name}.html'),
                     )
                     methods.append(method)
 
@@ -187,7 +190,8 @@ class Project:
 
                 for e_method in e_class.xpath('.//method'):
                     method_name = e_method.get('name')
-                    if method_name == method.name:
+                    method_signature = e_method.get('signature')
+                    if method_name == method.name and method_signature == method.signature:
                         coverage = Coverage.from_element(e_method)
                         return coverage.branch_rate == 1.0
 

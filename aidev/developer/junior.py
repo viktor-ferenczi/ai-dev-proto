@@ -115,6 +115,43 @@ Please ALWAYS honor ALL of these general rules:
 
 This is an EXAMPLE on how to cover a HTTP GET request handler method with a test fixture:
 ```cs
+{example_source}
+```
+
+
+Consider the following CONTROLLER from an ASP.NET service based on .NET Core:
+```cs
+{controller_source}
+```
+
+
+MODELS you may need to know about in order to understand the CONTROLLER:
+```cs
+{models_source}
+```
+
+
+{view_info}
+
+
+Use the above EXAMPLE as a basis. Modify the example to cover the `{method.name}` 
+request handler method of the `{controller.name}`Controller class with a 
+test fixture in a similar way.
+
+The name of the test class must be `{controller.name}{method.name}Tests`. 
+
+The actual test methods may differ based on the controller method, 
+make sure to adapt the EXAMPLE appropriately. Remove the validation of
+the output to the reference if there is no corresponding view.
+ 
+Make sure to modify the reference file name (`"HomeIndex.html"`) to match 
+the name of the controller and method tested. This applies only if there
+is a corresponding view to the controller method.
+
+Write only the source code for the test fixture in a code block and nothing else.
+If you are unsure or miss some details in the context, then do not write anything.'''
+
+EXAMPLE_SOURCE = '''\
 using Shop.Tests.Tools;
 using System.Net;
 using System.Threading.Tasks;
@@ -151,38 +188,7 @@ namespace Shop.Tests.Fixtures
         }
     }
 }
-```
-
-
-Consider the following CONTROLLER from an ASP.NET service based on .NET Core:
-```cs
-{controller_source}
-```
-
-
-MODELS you may need to know about in order to understand the CONTROLLER:
-```cs
-{models_source}
-```
-
-
-Use the above EXAMPLE as a basis. Modify the example to cover the `{method.name}` 
-request handler method of the `{controller.name}`Controller class with a 
-test fixture in a similar way.
-
-The name of the test class must be `{controller.name}{method.name}Tests`. 
-
-The actual test methods may differ based on the controller method, 
-make sure to adapt the EXAMPLE appropriately. If the controller does not
-return any content, then do not add a test method to verify that the
-content returned by the server matches the reference.
- 
-Make sure to modify the reference file name (`"HomeIndex.html"`) to match 
-the name of the controller and method tested. Certainly this applies only if
-the content is verified. 
-
-Write only the source code for the test fixture in a code block and nothing else.
-If you are unsure or miss some details in the context, then do not write anything.'''
+'''
 
 
 def extract_replacement_from_completion(original: str, completion: str, top_marker: str, rng: TextRange) -> (str, str):
@@ -384,8 +390,10 @@ class Junior(Brain):
         instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
             controller=controller,
             method=method,
+            example_source=EXAMPLE_SOURCE.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
-            models_source='\n\n'.join(read_text_files(model_sources))
+            models_source='\n\n'.join(read_text_files(model_sources)),
+            view_info=f'There is a view corresponding to this controller method: `{method.view.name}.cshtml`' if os.path.exists(method.view.path) else 'There is no view corresponding to this controller method.'
         )
 
         system_token_count = self.engine.count_tokens(system)
@@ -394,7 +402,7 @@ class Junior(Brain):
         remaining_tokens = self.engine.max_context - input_token_count - 2000
         max_tokens_to_generate = min(remaining_tokens, 2000 + instruction_token_count * 2)
         params = GenerationParams(
-            number_of_completions=16,
+            number_of_completions=8,
             max_tokens=max_tokens_to_generate,
             temperature=0.3,
         )
@@ -410,7 +418,10 @@ class Junior(Brain):
                 state=state,
                 error=error_,
                 path=controller.path,
-                issue=f'Adding test fixture for {controller.name}Controller.{method.name}',
+                issue=Issue(
+                    key=f'{controller.name}Controller.{method.name}',
+                    message=f'Adding test fixture for {controller.name}Controller.{method.name}',
+                ),
                 original='',
                 system=system,
                 instruction=instruction,
@@ -447,8 +458,13 @@ class Junior(Brain):
                     attempt.error = error
                     return
 
+                if os.path.exists(method.output_path):
+                    os.remove(method.output_path)
+
                 self.project.test()
-                shutil.copy(method.output_path, method.reference_path)
+
+                if os.path.exists(method.output_path):
+                    shutil.copy(method.output_path, method.reference_path)
 
                 error = self.project.test_coverage()
                 if error:
@@ -465,11 +481,12 @@ class Junior(Brain):
 
             build_and_test()
             attempt.write_log()
+            print(f'{controller.name}{method.name} [{attempt.state}] {attempt.error}')
 
             if attempt.state == AttemptState.COMPLETED:
                 return True
 
-            self.project.roll_back_changes(self.tests_project_path)
+            # self.project.roll_back_changes(self.project.tests_project_path)
             os.remove(method.test_path)
 
             if os.path.exists(method.output_path):
