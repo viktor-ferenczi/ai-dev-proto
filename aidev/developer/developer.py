@@ -1,6 +1,12 @@
+import os.path
 import random
 from pprint import pprint
+from typing import Iterable
 
+from lxml import etree
+
+from .mvc import Controller, Method, Coverage, View, Model
+from ..common.util import load_text_file, iter_tree
 from ..developer.junior import Junior
 from ..developer.project import Project
 from ..engine.engine import Engine
@@ -55,11 +61,7 @@ class Developer:
 
         brain = Junior(self.project, self.engine)
 
-        # Run test coverage analysis
-        self.project.test_coverage()
-
-        # Identify the views not covered yet
-        # For each uncovered view:
+        # For each controller with any uncovered request handler methods:
         ## Identify possible HTTP requests to cover with test fixtures, feed controllers+model+view
         ## Generate those fixtures one by one, give the HomeIndexTests as 1-shot example
         ## Build and run the test case
@@ -69,7 +71,77 @@ class Developer:
         ## Commit the test
         # Repeat until all views are covered
 
-        while 1:
-            break
+        for controller in self.find_controllers():
+            print(controller.model_dump_json(indent=2))
 
-        print('All views are covered with test fixtures.')
+        print('All controller methods are covered with test fixtures.')
+
+    def find_controllers(self) -> Iterable[Controller]:
+        self.project.test_coverage()
+
+        print('Finding controllers and their dependencies')
+        coverage_path = os.path.join(self.project.project_dir, 'coverage.xml')
+        coverage = load_text_file(coverage_path)
+        tree = etree.fromstring(coverage)
+
+        web_server_dir = ''
+        all_models: list[Model] = []
+
+        for e_package in tree.xpath('.//package'):
+            for e_class in e_package.xpath('.//class'):
+
+                class_name = e_class.get('name')
+                if not class_name or not class_name[0].isalnum():
+                    continue
+                if not class_name.endswith('Controller'):
+                    continue
+
+                controller_name = class_name.rsplit('.')[-1][:-len('Controller')]
+                path = e_class.get('filename')
+
+                if not web_server_dir:
+
+                    web_server_dir = path
+                    while web_server_dir:
+                        web_server_dir, suffix = os.path.split(web_server_dir)
+                        if suffix == 'Controllers':
+                            break
+                    assert web_server_dir, f'No Controllers parent folder found for controller class: {os.path.split(path)}'
+
+                    models_dir = os.path.join(web_server_dir, 'Models')
+                    for model_path in iter_tree(models_dir):
+                        if model_path.endswith('Model.cs'):
+                            _, model_filename = os.path.split(model_path)
+                            model_name = model_filename[:-len('.cs')]
+                            all_models.append(Model(name=model_name, path=model_path))
+
+                controller_view_dir = os.path.join(web_server_dir, 'Views', controller_name)
+                controller_source = load_text_file(path)
+
+                methods: list[Method] = []
+                for e_method in e_class.xpath('.//method'):
+
+                    method_name = e_method.get('name')
+                    if not method_name or not method_name[0].isalnum():
+                        continue
+
+                    view = View(name=f'{controller_name}/{method_name}', path=os.path.join(controller_view_dir, f'{method_name}.cshtml'))
+                    view_source = load_text_file(view.path) if os.path.exists(view.path) else ''
+
+                    # FIMXE: Sloppy text based match, use a code map!
+                    models = [model for model in all_models if model.name in controller_source or model.name in view_source]
+
+                    method = Method(
+                        name=method_name,
+                        view=view,
+                        models=models,
+                        coverage=Coverage.from_element(e_method)
+                    )
+                    methods.append(method)
+
+                yield Controller(
+                    name=controller_name,
+                    path=path,
+                    methods=methods,
+                    coverage=Coverage.from_element(e_class)
+                )

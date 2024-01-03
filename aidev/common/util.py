@@ -1,5 +1,6 @@
 import difflib
 import os
+from typing import Iterable
 
 
 def get_next_free_numbered_dir(issue_log_dir: str) -> int:
@@ -38,3 +39,19 @@ def count_changed_lines(original: str, replacement: str) -> int:
 
 
 assert count_changed_lines("\n\n\nline 1\nline 2\n\nline 3\nline 4", "line 1\nline 2 changed\nline 3\nnew line 5") == 4
+
+
+def load_text_file(path: str, encoding='utf-8') -> str:
+    with open(path, 'rt', encoding=encoding) as f:
+        return f.read()
+
+
+def load_text_files(paths: list[str], encoding='utf-8') -> Iterable[str]:
+    for path in paths:
+        yield load_text_file(path, encoding)
+
+
+def iter_tree(basedir: str) -> Iterable[str]:
+    for dirpath, _, filenames in os.walk(basedir):
+        for filename in filenames:
+            yield os.path.join(dirpath, filename)

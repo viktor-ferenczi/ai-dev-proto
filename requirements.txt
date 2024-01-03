@@ -5,3 +5,4 @@ transformers
 vllm-client
 requests
 openai
+lxml
