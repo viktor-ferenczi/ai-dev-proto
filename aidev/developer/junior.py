@@ -461,6 +461,10 @@ class Junior(Brain):
                 self.project.test()
 
                 if os.path.exists(method.output_path):
+                    if not read_text_file(method.output_path).strip():
+                        attempt.state = AttemptState.EMPTY_OUTPUT
+                        attempt.error = error
+                        return
                     shutil.copy(method.output_path, method.reference_path)
 
                 error = self.project.test_coverage()
