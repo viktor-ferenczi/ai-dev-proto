@@ -92,6 +92,10 @@ class Project:
         return self.try_run_command('test solution', ['dotnet', 'test', '--no-build', '--nologo', '--logger', 'console', '.'])
 
     def test_coverage(self) -> str:
+        coverage_path = os.path.join(self.project_dir, 'coverage.xml')
+        if os.path.exists(coverage_path):
+            os.remove(coverage_path)
+
         return self.try_run_command('collect test coverage', ['dotnet-coverage', 'collect', '-f', 'cobertura', '-o', 'coverage.xml', 'dotnet', 'test'])
 
     def find_controllers(self) -> Iterable[Controller]:
