@@ -74,6 +74,9 @@ class Developer:
 
             # FIXME: Partially covered methods are considered as covered. Improve existing test coverage separately.
             uncovered_methods = [method for method in controller.methods if method.coverage.branch_rate == 0.0]
+            if not uncovered_methods:
+                print('No uncovered methods to choose from, skipping controller')
+                continue
             print(f'Choosing one from the {len(uncovered_methods)} uncovered methods')
             method = self.rng.choice(uncovered_methods)
 
