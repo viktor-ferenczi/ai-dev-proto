@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import os
 import random
@@ -21,6 +22,7 @@ class Developer:
         self.rng = random.Random()
 
     def prepare_working_copy(self, branch_name):
+        self.project.clean()
         if self.project.has_changes():
             raise RuntimeError(f'Please make sure there are no changes in your working copy: {self.project.project_dir}')
         self.project.ensure_branch(branch_name)

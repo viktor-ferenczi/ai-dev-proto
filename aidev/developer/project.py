@@ -85,6 +85,9 @@ class Project:
     def format_code(self):
         self.must_run_command(f'format code', ["dotnet", "format", '.'])
 
+    def clean(self):
+        self.must_run_command('clean solution', ['dotnet', 'clean'])
+
     def build(self) -> str:
         return self.try_run_command('build solution', ['dotnet', 'build'])
 
