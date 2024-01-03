@@ -46,7 +46,7 @@ def main():
     print(f'Project directory: {project_dir}')
     print(f'Branch name: {branch_name}')
 
-    project = Project(project_dir)
+    project = Project(project_name, project_dir)
     sonar = SonarClient(project_name)
     engine = OpenAIEngine()
     developer = Developer(project, sonar, engine)
