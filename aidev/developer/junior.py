@@ -148,10 +148,16 @@ Make sure to modify the reference file name (`"HomeIndex.html"`) to match
 the name of the controller and method tested. This applies only if there
 is a corresponding view to the controller method.
 
+Write only the authenticated test and omit the publicly accessible one if the data 
+viewed/accessed via the controller method is available only for logged in users.
+You can have both status and content tests for both the public and authenticated
+user cases, do what is meaningful in the context of the given controller method.
+
 Write only the source code for the test fixture in a code block and nothing else.
 If you are unsure or miss some details in the context, then do not write anything.'''
 
-EXAMPLE_SOURCE = '''\
+EXAMPLE_HOME_INDEX_TEST = '''\
+using Microsoft.Extensions.Tools.Internal;
 using Shop.Tests.Tools;
 using System.Net;
 using System.Threading.Tasks;
@@ -169,26 +175,46 @@ namespace Shop.Tests.Fixtures
         }
 
         [Fact]
-        public async Task Get_Index_Status()
+        public async Task Get_Status()
         {
+            _webApp.Logout();
+
             var response = await _webApp.Client.GetAsync("/");
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(response.IsSuccessStatusCode);
         }
 
         [Fact]
-        public async Task Get_Index_Content()
+        public async Task Get_Content()
         {
+            _webApp.Logout();
+
             var response = await _webApp.Client.GetAsync("/");
             var content = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode);
 
             var normalizedContent = Normalization.NormalizePageContent(content);
 
             var reference = new Reference("HomeIndex.html");
             reference.Verify(normalizedContent);
         }
+
+        [Fact]
+        public async Task Get_Authenticated_Content()
+        {
+            _webApp.Logout();
+            await _webApp.LoginAsAdmin();
+
+            var response = await _webApp.Client.GetAsync("/");
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode);
+
+            var normalizedContent = Normalization.NormalizePageContent(content);
+
+            var reference = new Reference("HomeIndexAuthenticated.html");
+            reference.Verify(normalizedContent);
+        }
     }
-}
-'''
+}'''
 
 
 def extract_replacement_from_completion(original: str, completion: str, top_marker: str, rng: TextRange) -> (str, str):
@@ -390,7 +416,7 @@ class Junior(Brain):
         instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
             controller=controller,
             method=method,
-            example_source=EXAMPLE_SOURCE.replace('Shop.', f'{self.project.project_name}.'),
+            example_source=EXAMPLE_HOME_INDEX_TEST.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
             models_source='\n\n'.join(read_text_files(model_sources)),
             view_info=f'There is a view corresponding to this controller method: `{method.view.name}.cshtml`' if os.path.exists(method.view.path) else 'There is no view corresponding to this controller method.'
