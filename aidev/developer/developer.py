@@ -22,14 +22,23 @@ class Developer:
         self.rng = random.Random()
 
     def prepare_working_copy(self, branch_name):
-        self.project.clean()
         if self.project.has_changes():
             raise RuntimeError(f'Please make sure there are no changes in your working copy: {self.project.project_dir}')
+
+        self.project.clean()
+
         self.project.ensure_branch(branch_name)
+
         self.project.format_code()
         self.project.stage_change('.')
+
         if self.project.has_changes():
             self.project.commit('Formatted code')
+
+        error = self.project.build()
+        if error:
+            print(error)
+            raise RuntimeError(f'Failed to build solution: {self.project.project_dir}')
 
     async def fix_issues(self, branch_name: str):
         self.prepare_working_copy(branch_name)
