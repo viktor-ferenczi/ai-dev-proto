@@ -445,7 +445,6 @@ class Junior(Brain):
             if attempt.state != AttemptState.GENERATED:
                 continue
 
-            assert not os.path.exists(method.test_path), f'Class {controller.name}{method.name}Tests already exists: {method.test_path}'
             write_text_file(method.test_path, attempt.replacement)
 
             def build_and_test():

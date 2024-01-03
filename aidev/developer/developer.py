@@ -1,3 +1,4 @@
+import os
 import random
 
 from .mvc import Controller
@@ -75,6 +76,10 @@ class Developer:
             uncovered_methods = [method for method in controller.methods if method.coverage.branch_rate == 0.0]
             print(f'Choosing one from the {len(uncovered_methods)} uncovered methods')
             method = self.rng.choice(uncovered_methods)
+
+            if os.path.exists(method.test_path):
+                print(f'WARN: Class {controller.name}{method.name}Tests already exists: {method.test_path}')
+                continue
 
             print(f'Covering method: {controller.name}Controller.{method.name}')
             if await brain.cover_controller_method(controller, method):
