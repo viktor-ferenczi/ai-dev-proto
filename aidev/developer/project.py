@@ -1,7 +1,12 @@
 import os
+import re
 from subprocess import check_output, Popen, STDOUT, PIPE
+from typing import Iterable
+from lxml import etree
 
-from aidev.common.config import C
+from .mvc import Controller, Model, Method, Coverage, View
+from ..common.config import C
+from ..common.util import read_text_file, iter_tree, remove_lines, keep_lines
 
 
 class Project:
@@ -14,6 +19,9 @@ class Project:
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
         self.attempts_dir: str = os.path.join(self.aidev_dir, "attempts")
         self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
+
+        self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
+        self.tests_project_path = os.path.join(self.tests_project_dir, f'{project_name}.Tests.csproj')
 
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.attempts_dir, exist_ok=True)
@@ -85,3 +93,102 @@ class Project:
 
     def test_coverage(self) -> str:
         return self.try_run_command('collect test coverage', ['dotnet-coverage', 'collect', '-f', 'cobertura', '-o', 'coverage.xml', 'dotnet', 'test'])
+
+    def find_controllers(self) -> Iterable[Controller]:
+        print('Finding controllers and their dependencies')
+        coverage_path = os.path.join(self.project_dir, 'coverage.xml')
+        coverage = read_text_file(coverage_path)
+        tree = etree.fromstring(coverage)
+
+        web_server_dir = ''
+        all_models: list[Model] = []
+
+        for e_package in tree.xpath('.//package'):
+            for e_class in e_package.xpath('.//class'):
+
+                class_name = e_class.get('name')
+                if not class_name or not class_name[0].isalnum():
+                    continue
+                if not class_name.endswith('Controller'):
+                    continue
+
+                controller_name = class_name.rsplit('.')[-1][:-len('Controller')]
+                path = e_class.get('filename')
+
+                if not web_server_dir:
+
+                    web_server_dir = path
+                    while web_server_dir:
+                        web_server_dir, suffix = os.path.split(web_server_dir)
+                        if suffix == 'Controllers':
+                            break
+                    assert web_server_dir, f'No Controllers parent folder found for controller class: {os.path.split(path)}'
+
+                    models_dir = os.path.join(web_server_dir, 'Models')
+                    for model_path in iter_tree(models_dir):
+                        if model_path.endswith('Model.cs'):
+                            _, model_filename = os.path.split(model_path)
+                            model_name = model_filename[:-len('.cs')]
+                            all_models.append(Model(name=model_name, path=model_path))
+
+                controller_view_dir = os.path.join(web_server_dir, 'Views', controller_name)
+                controller_source = read_text_file(path)
+                controller_source = remove_lines(controller_source, re.compile(r'^using\s.*;\s*$'))
+
+                methods: list[Method] = []
+                for e_method in e_class.xpath('.//method'):
+
+                    method_name = e_method.get('name')
+                    if not method_name or not method_name[0].isalnum():
+                        continue
+
+                    view = View(name=f'{controller_name}/{method_name}', path=os.path.join(controller_view_dir, f'{method_name}.cshtml'))
+                    view_source = read_text_file(view.path) if os.path.exists(view.path) else ''
+                    view_source = keep_lines(view_source, re.compile(r'^@model\s.*'))
+
+                    # FIMXE: Sloppy text based match, use a code map!
+                    models = [model for model in all_models if model.name in controller_source or model.name in view_source]
+
+                    method = Method(
+                        name=method_name,
+                        view=view,
+                        models=models,
+                        coverage=Coverage.from_element(e_method),
+                        test_path=os.path.join(tests_project_dir, 'Fixtures', f'{controller_name}{method_name}Tests.cs'),
+                        output_path=os.path.join(tests_project_dir, 'Output', 'Actual', f'{controller_name}{method_name}.html'),
+                        reference_path=os.path.join(tests_project_dir, 'Output', 'Reference', f'{controller_name}{method_name}.html'),
+                    )
+                    methods.append(method)
+
+                yield Controller(
+                    name=controller_name,
+                    path=path,
+                    methods=methods,
+                    coverage=Coverage.from_element(e_class),
+                )
+
+    def is_covered(self, controller: Controller, method: Method) -> bool:
+        coverage_path = os.path.join(self.project_dir, 'coverage.xml')
+        coverage = read_text_file(coverage_path)
+        tree = etree.fromstring(coverage)
+
+        for e_package in tree.xpath('.//package'):
+            for e_class in e_package.xpath('.//class'):
+
+                class_name = e_class.get('name')
+                if not class_name or not class_name[0].isalnum():
+                    continue
+                if not class_name.endswith('Controller'):
+                    continue
+
+                controller_name = class_name.rsplit('.')[-1][:-len('Controller')]
+                if controller_name != controller.name:
+                    continue
+
+                for e_method in e_class.xpath('.//method'):
+                    method_name = e_method.get('name')
+                    if method_name == method.name:
+                        coverage = Coverage.from_element(e_method)
+                        return coverage.branch_rate == 1.0
+
+        raise ValueError(f'Cannot find method in coverage data: {controller.name}Controller.{method.name}')

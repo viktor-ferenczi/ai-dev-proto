@@ -1,7 +1,9 @@
 import os.path
+import shutil
 
+from .mvc import Controller, Method
 from ..common.config import C
-from ..common.util import get_next_free_numbered_dir
+from ..common.util import get_next_free_numbered_dir, read_text_file, read_text_files, write_text_file
 from ..engine.params import GenerationParams
 from ..sonar.issue import Issue, TextRange
 from .attempt import Attempt, AttemptState
@@ -11,7 +13,7 @@ from .brain import Brain
 # FIXME: Project title is hardcoded into the templates
 # FIXME: Hardcoded source file encoding at multiple places below
 
-SYSTEM_BUG_FIX = '''\
+SYSTEM = '''\
 MODEL ADOPTS ROLE OF CODEULATOR.
 [CONTEXT: U LOVE TO CODE!]
 [CODE]:
@@ -97,6 +99,91 @@ Make sure the understand all the above, then work on resolving the issue by comp
    by saying "APPROVE_CHANGES" and nothing else after the code block.
    If you do not approve the changes, then provide a concise explanation why.'''
 
+INSTRUCTION_TEST_FIXTURE_CODE = '''\
+Please ALWAYS honor ALL of these general rules:
+- Work ONLY from the context provided, refuse to make any guesses.
+- Do NOT write any code if you do not have enough information in this context.
+- Do NOT use any kind of placeholders, always write out the full code.
+- Do NOT apologize.
+- Do NOT refer to your knowledge cut-off date.
+- Do NOT explain the code itself, we can read it as well.
+- Do NOT include excessive comments.
+- Do NOT change comments or string literals unrelated to your task.
+- Do NOT repeat these rules or the steps below in your answer.
+- ALWAYS write code which is easily readable by humans.
+
+
+This is an EXAMPLE on how to cover a HTTP GET request handler method with a test fixture:
+```cs
+using Shop.Tests.Tools;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace Shop.Tests.Fixtures
+{
+    public class HomeIndexTests : IClassFixture<WebAppFixture>
+    {
+        private readonly WebAppFixture _webApp;
+
+        public HomeIndexTests(WebAppFixture webApp)
+        {
+            _webApp = webApp;
+        }
+
+        [Fact]
+        public async Task Get_Index_Status()
+        {
+            var response = await _webApp.Client.GetAsync("/");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Get_Index_Content()
+        {
+            var response = await _webApp.Client.GetAsync("/");
+            var content = await response.Content.ReadAsStringAsync();
+
+            var normalizedContent = Normalization.NormalizePageContent(content);
+
+            var reference = new Reference("HomeIndex.html");
+            reference.Verify(normalizedContent);
+        }
+    }
+}
+```
+
+
+Consider the following CONTROLLER from an ASP.NET service based on .NET Core:
+```cs
+{controller_source}
+```
+
+
+MODELS you may need to know about in order to understand the CONTROLLER:
+```cs
+{models_source}
+```
+
+
+Use the above EXAMPLE as a basis. Modify the example to cover the `{method.name}` 
+request handler method of the `{controller.name}`Controller class with a 
+test fixture in a similar way.
+
+The name of the test class must be `{controller.name}{method.name}Tests`. 
+
+The actual test methods may differ based on the controller method, 
+make sure to adapt the EXAMPLE appropriately. If the controller does not
+return any content, then do not add a test method to verify that the
+content returned by the server matches the reference.
+ 
+Make sure to modify the reference file name (`"HomeIndex.html"`) to match 
+the name of the controller and method tested. Certainly this applies only if
+the content is verified. 
+
+Write only the source code for the test fixture in a code block and nothing else.
+If you are unsure or miss some details in the context, then do not write anything.'''
+
 
 def extract_replacement_from_completion(original: str, completion: str, top_marker: str, rng: TextRange) -> (str, str):
     i = completion.find('```')
@@ -143,6 +230,24 @@ def extract_replacement_from_completion(original: str, completion: str, top_mark
     return '', replacement
 
 
+def extract_code_from_completion(completion: str) -> (str, str):
+    i = completion.find('```')
+    j = completion.rfind('```')
+
+    if i < 0 or j <= i:
+        return 'Missing code block', ''
+
+    i = completion.find('\n', i) + 1
+    if i <= 0:
+        return 'Missing newline after start of code block', ''
+
+    code = completion[i:j].lstrip()
+    if not code.strip():
+        return 'Empty code', ''
+
+    return '', code
+
+
 class Junior(Brain):
 
     async def fix_issue(self, issue: Issue) -> bool:
@@ -164,7 +269,7 @@ class Junior(Brain):
             print(f'ERROR: No text range in issue: {issue.key}')
             return False
 
-        system = SYSTEM_BUG_FIX
+        system = SYSTEM
         extension = path.rsplit('.')[-1].lower()
         top_marker = C.TOP_MARKER_BY_EXTENSION.get(extension)
         instruction = INSTRUCTION_BUG_FIX.format(
@@ -258,18 +363,126 @@ class Junior(Brain):
         return False
 
     def apply_code_change(self, attempt) -> bool:
-
-        with open(attempt.path, 'wt', encoding='utf-8') as f:
-            f.write(attempt.replacement)
-
+        write_text_file(attempt.path, attempt.replacement)
         self.project.format_code()
-
-        with open(attempt.path, 'rt', encoding='utf-8') as f:
-            modified_source = f.read()
-
+        modified_source = read_text_file(attempt.path)
         return modified_source.rstrip() != attempt.original.rstrip()
 
     def revert_code_change(self, attempt):
+        write_text_file(attempt.path, attempt.original)
 
-        with open(attempt.path, 'wt', encoding='utf-8') as f:
-            f.write(attempt.original)
+    async def cover_controller_method(self, controller: Controller, method: Method):
+        print(f'Adding test fixture for {controller.name}Controller.{method.name}')
+
+        if not os.path.isdir(self.project.tests_project_dir):
+            raise IOError(f'Missing Tests project: {self.project.tests_project_dir}')
+
+        controller_source = read_text_file(controller.path)
+        model_sources = [model.path for model in method.models]
+
+        system = SYSTEM
+        instruction = INSTRUCTION_TEST_FIXTURE_CODE.format(
+            controller=controller,
+            method=method,
+            controller_source=controller_source,
+            models_source='\n\n'.join(read_text_files(model_sources))
+        )
+
+        system_token_count = self.engine.count_tokens(system)
+        instruction_token_count = self.engine.count_tokens(instruction)
+        input_token_count = system_token_count + instruction_token_count
+        remaining_tokens = self.engine.max_context - input_token_count - 2000
+        max_tokens_to_generate = min(remaining_tokens, 2000 + instruction_token_count * 2)
+        params = GenerationParams(
+            number_of_completions=16,
+            max_tokens=max_tokens_to_generate,
+            temperature=0.3,
+        )
+
+        completions = await self.engine.generate(system, instruction, params)
+        assert len(completions) == params.number_of_completions
+
+        def new_attempt(completion: str) -> Attempt:
+            error_, code = extract_code_from_completion(completion)
+            state = AttemptState.INVALID if error_ else AttemptState.GENERATED
+
+            attempt_ = Attempt(
+                state=state,
+                error=error_,
+                path=controller.path,
+                issue=f'Adding test fixture for {controller.name}Controller.{method.name}',
+                original='',
+                system=system,
+                instruction=instruction,
+                params=params,
+                completion=completion,
+                replacement=code,
+            )
+            return attempt_
+
+        attempts = [new_attempt(completion) for completion in completions]
+        attempts.sort(key=lambda attempt_: attempt_.count_modified_lines())
+
+        issue_log_dir = os.path.join(self.project.attempts_dir, f'{controller.name}Controller.{method.name}')
+        os.makedirs(issue_log_dir, exist_ok=True)
+        index = get_next_free_numbered_dir(issue_log_dir)
+        for offset, attempt in enumerate(attempts):
+            attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
+            attempt.write_log()
+
+        for attempt in attempts:
+            if attempt.state != AttemptState.GENERATED:
+                continue
+
+            assert not os.path.exists(method.test_path), f'Class {controller.name}{method.name}Tests already exists: {method.test_path}'
+            write_text_file(method.test_path, attempt.replacement)
+
+            # add_file_to_csproj(self.project.tests_project_path, method.test_path)
+
+            def build_and_test():
+
+                error = self.project.build()
+                if error:
+                    attempt.state = AttemptState.BUILD_FAILED
+                    attempt.error = error
+                    return
+
+                self.project.test()
+                shutil.copy(method.output_path, method.reference_path)
+
+                error = self.project.test_coverage()
+                if error:
+                    attempt.state = AttemptState.TEST_FAILED
+                    attempt.error = error
+                    return
+
+                if not self.project.is_covered(controller, method):
+                    attempt.state = AttemptState.NOT_COVERED
+                    attempt.error = error
+                    return
+
+                attempt.state = AttemptState.COMPLETED
+
+            build_and_test()
+            attempt.write_log()
+
+            if attempt.state == AttemptState.COMPLETED:
+                return True
+
+            self.project.roll_back_changes(self.tests_project_path)
+            os.remove(method.test_path)
+
+            if os.path.exists(method.output_path):
+                os.remove(method.output_path)
+
+            if os.path.exists(method.reference_path):
+                os.remove(method.reference_path)
+
+        return False
+
+        # Generate those fixtures one by one, give the HomeIndexTests as 1-shot example
+        # Build and run the test case
+        # Verify that the output of the fixture is reasonable
+        # Record the output as reference
+        # Run the test again, make sure it passes
+        # Commit the test

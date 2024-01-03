@@ -99,7 +99,7 @@ def command_test(project: Project, branch: str):  # , unit: bool, fixture: bool
     engine = OpenAIEngine()
     # FIXME: Refactor the code to allow for working without sonar
     developer = Developer(project, None, engine)
-    asyncio.run(developer.create_test_fixture(branch))
+    asyncio.run(developer.create_test_fixtures(branch))
 
 
 COMMANDS = {

@@ -31,6 +31,9 @@ class Method(BaseModel):
     view: View
     models: list[Model]
     coverage: Coverage
+    test_path: str
+    output_path: str
+    reference_path: str
 
 
 class Controller(BaseModel):
