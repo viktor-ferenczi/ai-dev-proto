@@ -302,8 +302,7 @@ class Junior(Brain):
 
         # FIXME: Hardcoded source file encoding (utf-8-sig is to remove the BOM)
         # FIXME: Can work only on a single source file at a time
-        with open(path, 'rt', encoding='utf-8-sig') as f:
-            original = f.read()
+        original = read_text_file(path)
 
         rng = issue.textRange
         if rng is None:
