@@ -2,9 +2,10 @@ import os
 import random
 from typing import Iterable, Tuple
 
+from .fixture_coder import FixtureCoder
 from .mvc import Controller, Method
 from ..common.dbdump import DatabaseDumper
-from ..developer.junior import Junior
+from ..developer.bugfix_coder import BugfixCoder
 from ..developer.project import Project
 from ..engine.engine import Engine
 from ..sonar.client import SonarClient
@@ -55,7 +56,7 @@ class Developer:
         self.project.analyze()
         query_open_issues()
 
-        brain = Junior(self.project, self.engine)
+        brain = BugfixCoder(self.project, self.engine)
         while issues:
             print(f'Choosing one from the {len(issues)} issues')
             issue = self.rng.choice(issues)
@@ -88,7 +89,7 @@ class Developer:
             for table_name in table_names
         }
 
-        brain = Junior(self.project, self.engine)
+        brain = FixtureCoder(self.project, self.engine)
 
         remaining = 0
 

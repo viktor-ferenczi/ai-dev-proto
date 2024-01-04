@@ -88,3 +88,21 @@ def keep_lines(text: str, rx: re.Pattern, separator='\n') -> str:
 
 def remove_lines(text: str, rx: re.Pattern, separator='\n') -> str:
     return '\n'.join(line for line in text.split(separator) if rx.match(line) is None)
+
+
+def extract_code_from_completion(completion: str) -> (str, str):
+    i = completion.find('```')
+    j = completion.rfind('```')
+
+    if i < 0 or j <= i:
+        return '', 'Missing code block'
+
+    i = completion.find('\n', i) + 1
+    if i <= 0:
+        return '', 'Missing newline after start of code block'
+
+    code = completion[i:j].lstrip()
+    if not code.strip():
+        return 'Empty code', ''
+
+    return code, ''
