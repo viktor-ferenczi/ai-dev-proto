@@ -56,11 +56,11 @@ class Developer:
         self.project.analyze()
         query_open_issues()
 
-        brain = BugfixCoder(self.project, self.engine)
+        coder = BugfixCoder(self.project, self.engine)
         while issues:
             print(f'Choosing one from the {len(issues)} issues')
             issue = self.rng.choice(issues)
-            if await brain.fix_issue(issue):
+            if await coder.fix_issue(issue):
                 self.project.stage_change('.')
                 self.project.commit(f'{issue.key}: {issue.message}')
                 self.project.analyze()
@@ -89,10 +89,9 @@ class Developer:
             for table_name in table_names
         }
 
-        brain = FixtureCoder(self.project, self.engine)
-
         remaining = 0
 
+        coder = FixtureCoder(self.project, self.engine)
         for attempt_index in range(max_attempts):
             temperature = 0.2 + (0.8 - 0.2) * attempt_index / max_attempts
 
@@ -124,7 +123,7 @@ class Developer:
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await brain.cover_controller_method(controller, method, db_ids, temperature=temperature, allow_failure=False):
+                if await coder.cover_controller_method(controller, method, db_ids, temperature=temperature, allow_failure=False):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')
