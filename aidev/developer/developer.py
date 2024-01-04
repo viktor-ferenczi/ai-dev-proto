@@ -73,28 +73,8 @@ class Developer:
 
         self.prepare_working_copy(branch_name)
 
-        self.project.test()
-        dbpath = self.project.find('FoodShop.Test.db')
-        assert dbpath, 'Test database not found'
-        dumper = DatabaseDumper(dbpath)
-        table_names = (
-            'Categories',
-            'Foods',
-            'OrderDetails',
-            'Orders',
-            'ShoppingCartItems',
-        )
-        db_ids = {
-            table_name: [row[0] for row in dumper.iter_rows(table_name)]
-            for table_name in table_names
-        }
-        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
-        info = f'''\
-Valid database IDs by table name:
-```
-{formatted_db_ids}
-```
-'''
+        info = ''
+        # info += await self.collect_db_ids()
 
         remaining = 0
 
@@ -145,3 +125,28 @@ Valid database IDs by table name:
             print(f'Failed to cover {remaining} controller methods')
         else:
             print('Covered all controller methods')
+
+    async def collect_db_ids(self):
+        dbpath = self.project.find('FoodShop.Test.db')
+        assert dbpath, 'Test database not found'
+        dumper = DatabaseDumper(dbpath)
+        table_names = (
+            'Categories',
+            'Foods',
+            'OrderDetails',
+            'Orders',
+            'ShoppingCartItems',
+        )
+        db_ids = {
+            table_name: [row[0] for row in dumper.iter_rows(table_name)]
+            for table_name in table_names
+        }
+        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
+        info = f'''\
+Valid database IDs by table name:
+```
+{formatted_db_ids}
+```
+
+'''
+        return info
