@@ -15,7 +15,7 @@ SCRIPT_DIR = os.path.dirname(__file__)
 
 
 def load_text(filename: str) -> str:
-    with open(os.path.join(SCRIPT_DIR, filename), 'rt', encoding='utf-8') as f:
+    with open(os.path.join(SCRIPT_DIR, filename), 'rt', encoding='utf-8-sig') as f:
         return f.read().replace('\r\n', '\n').replace('\r', '')
 
 

@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="cli test" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="cli test --keep" type="PythonConfigurationType" factoryName="Python">
     <module name="ai-dev-proto" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
@@ -15,7 +15,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/aidev/cli/cli.py" />
-    <option name="PARAMETERS" value="-b ai_test_01 test" />
+    <option name="PARAMETERS" value="-b ai_test_01 test -k" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

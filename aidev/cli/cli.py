@@ -4,6 +4,7 @@ import sys
 import os
 from typing import Optional
 
+from aidev.common.config import C
 from aidev.developer.developer import Developer
 from aidev.developer.project import Project
 from aidev.engine.openai_engine import OpenAIEngine
@@ -19,10 +20,10 @@ class ArgParser(argparse.ArgumentParser):
         if add_subparsers:
             # Common arguments
             self.add_argument('-v', '--verbose', action='count', default=0, help='Verbose logging')
-            self.add_argument('-c', '--config', help='Path to the global configuration file [~/.aidev/config.toml]')
-            self.add_argument('-p', '--project', default='.', help='Project directory [current directory]')
-            self.add_argument('-n', '--name', default='Project', help='Name of the project [default: Project]')
-            self.add_argument('-b', '--branch', default='ai-dev', help='Name of the Git branch to commit to [default: ai-dev]')
+            self.add_argument('-c', '--config', default='', help='Path to the global configuration file [~/.aidev/config.toml]')
+            self.add_argument('-p', '--project', default='', help='Project directory [current directory]')
+            self.add_argument('-n', '--name', default='', help='Name of the project [Project]')
+            self.add_argument('-b', '--branch', default='', help='Name of the Git branch to commit to [aidev]')
 
             # Subcommands
             self.subparsers = self.add_subparsers(dest='command', help='Subcommand')
@@ -32,6 +33,7 @@ class ArgParser(argparse.ArgumentParser):
             fix_parser.add_argument('-s', '--source', default='sonar', choices=['sonar'], help='Source of the issues to process [sonar]')
 
             test_parser = self.subparsers.add_parser('test', help='Improve test coverage', add_subparsers=False)
+            test_parser.add_argument('-k', '--keep', action='store_true', help='Keep code which compiles, but fails to test')
             # test_parser.add_argument('-u', '--unit', action='store_true', help='Create unit tests')
             # test_parser.add_argument('-f', '--fixture', action='store_true', help='Create test fixtures')
 
@@ -63,9 +65,20 @@ def main(argv: Optional[list[str]] = None):
         print(f'Unknown command: {command}', file=sys.stderr)
         sys.exit(1)
 
-    project_dir = args.project
-    project_name = args.name
-    branch = args.branch
+    config_path = args.config
+    if config_path:
+        if not os.path.exists(config_path):
+            raise IOError(f'Missing configuration file: {config_path}')
+        C.load(config_path)
+
+    project_dir = args.project or C.PROJECT_DIR or '.'
+
+    project_config_path = os.path.join(project_dir, '.aidev', 'config.toml')
+    if os.path.exists(project_config_path):
+        C.load(project_config_path)
+
+    project_name = args.name or C.PROJECT_NAME or 'Project'
+    branch = args.branch or C.PROJECT_BRANCH or 'aidev'
 
     if not os.path.isdir(project_dir):
         print(f'The path "{project_dir}" is not a valid directory.', file=sys.stderr)
@@ -83,7 +96,7 @@ def main(argv: Optional[list[str]] = None):
 
     project = Project(project_dir, project_name)
     subparser = parser.subparsers.choices[command]
-    subparser_argument_names = [action.dest for action in subparser._actions if isinstance(action, argparse._StoreAction)]
+    subparser_argument_names = [action.dest for action in subparser._actions if action.__class__.__name__.startswith('_Store')]
     COMMANDS[command](project, branch, **{name: getattr(args, name) for name in subparser_argument_names})
 
 
@@ -95,15 +108,16 @@ def command_fix(project: Project, branch: str, source: str):
     asyncio.run(developer.fix_issues(branch))
 
 
-def command_test(project: Project, branch: str):  # , unit: bool, fixture: bool
-    sonar = SonarClient(project.project_name)
+def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
     engine = OpenAIEngine()
-    developer = Developer(project, sonar, engine)
-    asyncio.run(developer.create_test_fixture(branch))
+    # FIXME: Refactor the code to allow for working without sonar
+    developer = Developer(project, None, engine)
+    asyncio.run(developer.create_test_fixtures(branch, keep))
 
 
 COMMANDS = {
     'fix': command_fix,
+    'test': command_test,
 }
 
 if __name__ == '__main__':

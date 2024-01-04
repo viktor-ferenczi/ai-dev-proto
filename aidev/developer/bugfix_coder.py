@@ -1,17 +1,17 @@
 import os.path
 
+from .base_coder import BaseCoder
 from ..common.config import C
-from ..common.util import get_next_free_numbered_dir
+from ..common.util import get_next_free_numbered_file, read_text_file, write_text_file
 from ..engine.params import GenerationParams
-from ..sonar.issue import Issue, TextRange
+from ..sonar.issue import Issue
 from .attempt import Attempt, AttemptState
-from .brain import Brain
 
 # FIXME: Programming language is hardcoded into the templates
 # FIXME: Project title is hardcoded into the templates
 # FIXME: Hardcoded source file encoding at multiple places below
 
-SYSTEM_BUG_FIX = '''\
+SYSTEM = '''\
 MODEL ADOPTS ROLE OF CODEULATOR.
 [CONTEXT: U LOVE TO CODE!]
 [CODE]:
@@ -25,7 +25,7 @@ MODEL ADOPTS ROLE OF CODEULATOR.
 
 You are an expert C# developer working on an ASP.NET Service based on .NET Core.'''
 
-INSTRUCTION_BUG_FIX = '''\
+INSTRUCTION = '''\
 Consider the following original source code from an ASP.NET service based on .NET Core:
 ```{doctype}
 {top_marker}
@@ -98,32 +98,32 @@ Make sure the understand all the above, then work on resolving the issue by comp
    If you do not approve the changes, then provide a concise explanation why.'''
 
 
-def extract_replacement_from_completion(original: str, completion: str, top_marker: str, rng: TextRange) -> (str, str):
+def extract_replacement_from_completion(original: str, completion: str, top_marker: str) -> (str, str):
     i = completion.find('```')
     j = completion.rfind('```')
 
     if i < 0 or j <= i:
-        return 'Missing code block', ''
+        return '', 'Missing code block'
 
     i = completion.find('\n', i) + 1
     if i <= 0:
-        return 'Missing newline after start of code block', ''
+        return '', 'Missing newline after start of code block'
 
     replacement = completion[i:j].lstrip()
 
     if not replacement.strip():
-        return 'Empty replacement', replacement
+        return replacement, 'Empty replacement'
 
     if not replacement.startswith(top_marker):
-        return 'Replacement is missing the TOP_MARKER', replacement
+        return replacement, 'Replacement is missing the TOP_MARKER'
 
     replacement = replacement[len(top_marker) + 1:]
 
     if not replacement.strip():
-        return 'Empty replacement after TOP_MARKER', replacement
+        return replacement, 'Empty replacement after TOP_MARKER'
 
     if replacement == original:
-        return 'No change', replacement
+        return replacement, 'No change'
 
     original = original.rstrip('\n') + '\n'
     replacement = replacement.rstrip('\n') + '\n'
@@ -132,18 +132,18 @@ def extract_replacement_from_completion(original: str, completion: str, top_mark
     replacement_lines = replacement.splitlines(keepends=True)
 
     if len(original_lines) == len(replacement_lines) and all((a.rstrip() == b.rstrip()) for a, b in zip(original_lines, replacement_lines)):
-        return 'Only whitespace changes after stripping trailing whitespace', replacement
+        return replacement, 'Only whitespace changes after stripping trailing whitespace'
 
     if '```' in replacement:
-        return 'Multiple code blocks (ambiguous)', replacement
+        return replacement, 'Multiple code blocks (ambiguous)'
 
     if 'APPROVE_CHANGES' not in completion[:i] and 'APPROVE_CHANGES' not in completion[j:]:
-        return 'Changes not approved by self-review', replacement
+        return replacement, 'Changes not approved by self-review'
 
-    return '', replacement
+    return replacement, ''
 
 
-class Junior(Brain):
+class BugfixCoder(BaseCoder):
 
     async def fix_issue(self, issue: Issue) -> bool:
         print(f'Working on issue: {issue.key}')
@@ -156,18 +156,17 @@ class Junior(Brain):
 
         # FIXME: Hardcoded source file encoding (utf-8-sig is to remove the BOM)
         # FIXME: Can work only on a single source file at a time
-        with open(path, 'rt', encoding='utf-8-sig') as f:
-            original = f.read()
+        original = read_text_file(path)
 
         rng = issue.textRange
         if rng is None:
             print(f'ERROR: No text range in issue: {issue.key}')
             return False
 
-        system = SYSTEM_BUG_FIX
+        system = SYSTEM
         extension = path.rsplit('.')[-1].lower()
         top_marker = C.TOP_MARKER_BY_EXTENSION.get(extension)
-        instruction = INSTRUCTION_BUG_FIX.format(
+        instruction = INSTRUCTION.format(
             source=original,
             doctype=C.DOCTYPE_BY_EXTENSION.get(extension, ''),
             top_marker=top_marker,
@@ -192,7 +191,7 @@ class Junior(Brain):
         assert len(completions) == params.number_of_completions
 
         def new_attempt(completion: str) -> Attempt:
-            error_, replacement = extract_replacement_from_completion(original, completion, top_marker, rng)
+            replacement, error_ = extract_replacement_from_completion(original, completion, top_marker)
             state = AttemptState.INVALID if error_ else AttemptState.GENERATED
 
             attempt_ = Attempt(
@@ -219,10 +218,10 @@ class Junior(Brain):
 
         issue_log_dir = os.path.join(self.project.attempts_dir, f'{issue.key}')
         os.makedirs(issue_log_dir, exist_ok=True)
-        index = get_next_free_numbered_dir(issue_log_dir)
+        index = get_next_free_numbered_file(issue_log_dir)
         for offset, attempt in enumerate(attempts):
             attempt.log_path = os.path.join(issue_log_dir, f'{index + offset:04d}.md')
-            attempt.write_log()
+            # attempt.write_log()
 
         for attempt in attempts:
             if attempt.state != AttemptState.GENERATED:
@@ -258,18 +257,10 @@ class Junior(Brain):
         return False
 
     def apply_code_change(self, attempt) -> bool:
-
-        with open(attempt.path, 'wt', encoding='utf-8') as f:
-            f.write(attempt.replacement)
-
+        write_text_file(attempt.path, attempt.replacement)
         self.project.format_code()
-
-        with open(attempt.path, 'rt', encoding='utf-8') as f:
-            modified_source = f.read()
-
+        modified_source = read_text_file(attempt.path)
         return modified_source.rstrip() != attempt.original.rstrip()
 
     def revert_code_change(self, attempt):
-
-        with open(attempt.path, 'wt', encoding='utf-8') as f:
-            f.write(attempt.original)
+        write_text_file(attempt.path, attempt.original)
