@@ -1,6 +1,5 @@
 import os.path
 import shutil
-from typing import Dict
 
 from .base_coder import BaseCoder
 from .mvc import Controller, Method
@@ -84,8 +83,21 @@ user cases, do what is meaningful in the context of the given controller method.
 Before unauthenticated tests always call `_webApp.Logout`. 
 Before authenticated tests always call `await _webApp.LoginAsAdmin`.
 
-Write only the source code for the test fixture in a code block and nothing else.
-If you are unsure or miss some details in the context, then do not write anything.'''
+Make sure the understand all the above, then complete these steps:
+
+1. Take a deep breath and think about what is required to implement a test
+   fixture for the `{controller.name}Controller.{method.name}` method.
+   Provide a very concise list of the knowledge required for this.
+   Put the list of requirements into a <requirements>...</requirements> block.
+   
+2. Write up a very concise, step by step plan for implementing the test fixture.
+   It will serve only for your reference and not part of the actual output.
+   Put the list of requirements into a <plan>...</plan> block.
+   
+3. If you are unsure how to implement the test fixture or miss any required information,
+   then then do not write anything and stop here.
+
+4. Write down the full source code of the test fixture in a code block and nothing else.'''
 
 EXAMPLE = '''\
 using Shop.Tests.Tools;
