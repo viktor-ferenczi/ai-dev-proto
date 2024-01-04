@@ -39,6 +39,11 @@ class Developer:
             print(error)
             raise RuntimeError(f'Failed to build solution: {self.project.project_dir}')
 
+        error = self.project.test()
+        if error:
+            print(error)
+            raise RuntimeError(f'Failed to test solution: {self.project.project_dir}')
+
     async def fix_issues(self, branch_name: str):
         self.prepare_working_copy(branch_name)
 
