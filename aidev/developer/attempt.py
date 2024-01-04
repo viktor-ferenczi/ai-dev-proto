@@ -47,9 +47,6 @@ class Attempt(BaseModel):
 # STATE
 `{self.state}`
 
-# ERROR
-{self.error or 'OK'}
-
 # PATH
 `{self.path}`
 
@@ -81,4 +78,7 @@ class Attempt(BaseModel):
 ```{doctype}
 {self.replacement}
 ```
+
+# ERROR
+{self.error or 'OK'}
 '''
