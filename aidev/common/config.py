@@ -5,7 +5,7 @@ import toml
 
 
 class Config:
-    # Project
+    # Project (solution)
     PROJECT_DIR: str = os.getenv('AIDEV_PROJECT_DIR', '')
     PROJECT_NAME: str = os.getenv('AIDEV_PROJECT_DIR', '')
     PROJECT_BRANCH: str = os.getenv('AIDEV_PROJECT_BRANCH', '')
@@ -25,6 +25,9 @@ class Config:
     # SonarQube API
     SONAR_BASE_URL: str = os.getenv('SONAR_BASE_URL', 'http://127.0.0.1:9000')
     SONAR_TOKEN: str = os.getenv('SONAR_TOKEN', '')
+
+    # Coding
+    KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Markdown code block type by file extension
     DOCTYPE_BY_EXTENSION: Dict[str, str] = {

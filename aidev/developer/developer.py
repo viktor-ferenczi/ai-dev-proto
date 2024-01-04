@@ -4,6 +4,7 @@ from typing import Iterable, Tuple
 
 from .fixture_coder import FixtureCoder
 from .mvc import Controller, Method
+from ..common.config import C
 from ..common.dbdump import DatabaseDumper
 from ..developer.bugfix_coder import BugfixCoder
 from ..developer.project import Project
@@ -68,7 +69,7 @@ class Developer:
 
         print('No more issues to fix.')
 
-    async def create_test_fixtures(self, branch_name: str, max_attempts: int = 10):
+    async def create_test_fixtures(self, branch_name: str, keep: bool, max_attempts: int = 10):
         assert max_attempts > 0
 
         self.prepare_working_copy(branch_name)
@@ -110,7 +111,7 @@ class Developer:
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await coder.cover_controller_method(controller, method, temperature=temperature, info=info, allow_failure=False):
+                if await coder.cover_controller_method(controller, method, temperature=temperature, info=info, allow_failure=keep):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')

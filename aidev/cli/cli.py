@@ -33,6 +33,7 @@ class ArgParser(argparse.ArgumentParser):
             fix_parser.add_argument('-s', '--source', default='sonar', choices=['sonar'], help='Source of the issues to process [sonar]')
 
             test_parser = self.subparsers.add_parser('test', help='Improve test coverage', add_subparsers=False)
+            test_parser.add_argument('-k', '--keep', action='store_true', help='Keep code which compiles, but fails to test')
             # test_parser.add_argument('-u', '--unit', action='store_true', help='Create unit tests')
             # test_parser.add_argument('-f', '--fixture', action='store_true', help='Create test fixtures')
 
@@ -95,7 +96,7 @@ def main(argv: Optional[list[str]] = None):
 
     project = Project(project_dir, project_name)
     subparser = parser.subparsers.choices[command]
-    subparser_argument_names = [action.dest for action in subparser._actions if isinstance(action, argparse._StoreAction)]
+    subparser_argument_names = [action.dest for action in subparser._actions if action.__class__.__name__.startswith('_Store')]
     COMMANDS[command](project, branch, **{name: getattr(args, name) for name in subparser_argument_names})
 
 
@@ -107,11 +108,11 @@ def command_fix(project: Project, branch: str, source: str):
     asyncio.run(developer.fix_issues(branch))
 
 
-def command_test(project: Project, branch: str):  # , unit: bool, fixture: bool
+def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
     engine = OpenAIEngine()
     # FIXME: Refactor the code to allow for working without sonar
     developer = Developer(project, None, engine)
-    asyncio.run(developer.create_test_fixtures(branch))
+    asyncio.run(developer.create_test_fixtures(branch, keep))
 
 
 COMMANDS = {
