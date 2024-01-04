@@ -58,12 +58,7 @@ MODELS you may need to know about for better understanding of the CONTROLLER abo
 {models_source}
 ```
 
-
-Valid database IDs to use in the request parameters by table name:
-```
-{formatted_db_ids}
-```
-
+{info}
 
 Based on the above EXAMPLE write a test fixture to cover the above
 `{controller.name}Controller.{method.name}` CONTROLLER METHOD. This method
@@ -152,7 +147,7 @@ namespace Shop.Tests.Fixtures
 
 class FixtureCoder(BaseCoder):
 
-    async def cover_controller_method(self, controller: Controller, method: Method, db_ids: Dict[str, list[int]], *, allow_failure=False, temperature: float = 0.3):
+    async def cover_controller_method(self, controller: Controller, method: Method, *, temperature: float = 0.3, info: str = '', allow_failure=False):
         print(f'Adding test fixture for {controller.name}Controller.{method.name}')
 
         if not os.path.isdir(self.project.tests_project_dir):
@@ -161,8 +156,6 @@ class FixtureCoder(BaseCoder):
         controller_source = read_text_file(controller.path)
         model_sources = [model.path for model in method.models]
 
-        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
-
         system = SYSTEM
         instruction = INSTRUCTION.format(
             controller=controller,
@@ -170,7 +163,7 @@ class FixtureCoder(BaseCoder):
             example_source=EXAMPLE.replace('Shop.', f'{self.project.project_name}.'),
             controller_source=controller_source,
             models_source='\n\n'.join(read_text_files(model_sources)),
-            formatted_db_ids=formatted_db_ids,
+            info=info,
         )
 
         system_token_count = self.engine.count_tokens(system)

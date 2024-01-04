@@ -88,6 +88,13 @@ class Developer:
             table_name: [row[0] for row in dumper.iter_rows(table_name)]
             for table_name in table_names
         }
+        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
+        info = f'''\
+Valid database IDs by table name:
+```
+{formatted_db_ids}
+```
+'''
 
         remaining = 0
 
@@ -123,7 +130,7 @@ class Developer:
             remaining = 0
             for controller, method in controller_methods:
                 print(f'Covering method: {controller.name}Controller.{method.name}')
-                if await coder.cover_controller_method(controller, method, db_ids, temperature=temperature, allow_failure=False):
+                if await coder.cover_controller_method(controller, method, temperature=temperature, info=info, allow_failure=False):
                     print(f'Covered {controller.name}Controller.{method.name}')
                     self.project.stage_change('.')
                     self.project.commit(f'Covered {controller.name}Controller.{method.name}')
