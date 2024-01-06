@@ -1,11 +1,30 @@
-from typing import List
+import json
+from typing import List, Optional
 
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 
 from .engine import Engine
 from .params import GenerationParams
 from ..common.config import C
 from ..tokenizer.tokenizer import get_tokenizer
+
+
+class Usage(BaseModel):
+    generations: int = 0
+    completions: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    def save(self, path: str):
+        data = self.model_dump_json(indent=2)
+        with open(path, 'wb') as f:
+            json.dump(data, f)
+
+    def load(self, path: str):
+        with open(path, 'rb') as f:
+            data = json.load(f)
+        self.__dict__.update(data)
 
 
 class OpenAIEngine(Engine):
@@ -16,6 +35,7 @@ class OpenAIEngine(Engine):
         self.api_key = api_key or C.OPENAI_KEY
         self.model = model or C.MODEL
         self.tokenizer = get_tokenizer(self.model)
+        self.usage = Usage()
 
     def count_tokens(self, text: str) -> int:
         return self.tokenizer.count_tokens(text)
@@ -35,6 +55,11 @@ class OpenAIEngine(Engine):
             )
         finally:
             await client.close()
+
+        self.usage.generations += 1
+        self.usage.completions += len(completion.choices)
+        self.usage.prompt_tokens += completion.usage.prompt_tokens
+        self.usage.completion_tokens += completion.usage.completion_tokens
 
         assert len(completion.choices) == params.number_of_completions, (len(completion.choices), params.number_of_completions)
         return [choice.message.content for choice in completion.choices]
