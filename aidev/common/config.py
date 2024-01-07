@@ -10,9 +10,9 @@ class Config:
     PROJECT_NAME: str = os.getenv('AIDEV_PROJECT_DIR', '')
     PROJECT_BRANCH: str = os.getenv('AIDEV_PROJECT_BRANCH', '')
 
-    # LLM model name: codellama, deepseek
-    # It is used to select the right tokenizer and chat template
-    MODEL: str = os.getenv('AIDEV_MODEL', 'deepseek')
+    # LLM model name (valid values are the keys of Config._MODEL_NAMES)
+    # It is used to select the right tokenizer, chat template, max context size and optimal parallel sequence count
+    MODEL: str = os.getenv('AIDEV_MODEL', 'codellama')
 
     # OpenAI API compatible LLM engine
     OPENAI_BASE_URL: str = os.getenv('AIDEV_OPENAI_BASE_URL', 'http://127.0.0.1:8000/v1')
@@ -30,17 +30,37 @@ class Config:
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Markdown code block type by file extension
-    DOCTYPE_BY_EXTENSION: Dict[str, str] = {
+    _DOCTYPE_BY_EXTENSION: Dict[str, str] = {
         'cs': 'cs',
         'py': 'python',
         'cshtml': 'cshtml',
     }
 
     # Top of source marker by file extension
-    TOP_MARKER_BY_EXTENSION: Dict[str, str] = {
+    _TOP_MARKER_BY_EXTENSION: Dict[str, str] = {
         'cs': '// TOP_MARKER',
         'py': '# TOP_MARKER',
         'cshtml': '<!-- TOP_MARKER -->',
+    }
+
+    # Valid models
+    _MODEL_NAMES: Dict[str, str] = {
+        'codellama': 'CodeLlama',
+        'deepseek-coder': 'DeepSeek Coder',
+        'deepseek-llm': 'DeepSeek LLM',
+        'yi': 'Yi',
+    }
+    _CONTEXT_SIZE: Dict[str, int] = {
+        'codellama': 16384,  # Should work at 32k or even 64k, but it needs changes in engine config
+        'deepseek-coder': 16384,
+        'deepseek-llm': 4096,
+        'yi': 65536,
+    }
+    _OPTIMAL_PARALLEL_SEQUENCES: Dict[str, int] = {
+        'codellama': 16,
+        'deepseek-coder': 16,
+        'deepseek-llm': 16,
+        'yi': 16,
     }
 
     def save(self, path: str):

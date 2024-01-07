@@ -1,7 +1,13 @@
+import asyncio
 import difflib
 import os
 import re
 from typing import Iterable
+
+
+# Reduce the warnings about long-running tasks
+def set_task_warning_threshold(duration: float):
+    asyncio.get_running_loop().slow_callback_duration = duration
 
 
 def get_next_free_numbered_file(issue_log_dir: str) -> int:

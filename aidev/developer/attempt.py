@@ -42,7 +42,7 @@ class Attempt(BaseModel):
         write_text_file(self.log_path, self.to_markdown())
 
     def to_markdown(self) -> str:
-        doctype = C.DOCTYPE_BY_EXTENSION.get(self.path.rsplit('.', 1)[-1].lower(), '')
+        doctype = C._DOCTYPE_BY_EXTENSION.get(self.path.rsplit('.', 1)[-1].lower(), '')
         return f'''\
 # STATE
 `{self.state}`

@@ -7,6 +7,7 @@ import unittest
 
 from aidev.common.config import C
 from aidev.common.async_helpers import AsyncPool
+from aidev.common.util import set_task_warning_threshold
 from aidev.tokenizer import tokenizer
 
 SCRIPT_DIR = os.path.dirname(__file__)
@@ -53,7 +54,8 @@ def crop_text(text: str, max_tokens: int, separator: str = '\n\n') -> str:
     return result
 
 
-assert crop_text('First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
+# This test works only for the DeepSeek tokenizer
+# assert crop_text('First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
 
 TEST_TEXT = load_text('pg18857.txt')
 TEST_TEXT = TEST_TEXT[TEST_TEXT.find('CHAPTER 1\n'):]
@@ -282,15 +284,14 @@ class SyncOpenAITest(unittest.TestCase):
         print(completion.choices[0].message.content.lstrip())
 
     def test_long_context(self):
-        for size_kb in (1, 2, 4, 8, 16, 32, 64, 128, 256):
-            size = size_kb * 1024
+        for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 81920, 98304, 131072, 163840, 196608, 229376, 262144):
             if size > self.max_context:
                 break
 
-            text = crop_text(TEST_TEXT, size - 450)
+            text = crop_text(TEST_TEXT, (size - 450) // 2)
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-            instruction = f'{text}\n\nPlease summarize the above text in 3 sentences.'
-            print(f'{size_kb}k: {count_tokens(system)} system + {count_tokens(instruction)} instruction + 400 completion')
+            instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
+            print(f'{size:>6d}: {count_tokens(system)} system + {count_tokens(instruction)} instruction + 400 completion')
 
             completion = self.client.chat.completions.create(
                 messages=[
@@ -305,16 +306,20 @@ class SyncOpenAITest(unittest.TestCase):
             self.assertTrue(bool(completion))
             self.assertEqual(len(completion.choices), 1)
 
-            self.assertTrue(bool(completion.choices[0].message.content), completion.choices[0].message.content)
-            print(completion.choices[0].message.content)
+            content = completion.choices[0].message.content
+            self.assertTrue('4242' in content, f'First key is missed: {content}')
+            self.assertTrue('1337' in content, f'Second key is missed: {content}')
 
             token_count = completion.usage.completion_tokens
             self.assertTrue(token_count > 0, str(token_count))
-            print()
 
 
 class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
     max_parallel_connections = 16
+
+    async def asyncSetUp(self):
+        set_task_warning_threshold(1.0)
+        return await super().asyncSetUp()
 
     async def test_generation(self):
         self.token_count = 0

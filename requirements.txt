@@ -1,8 +1,14 @@
 toml
 aiohttp
 pydantic
-transformers
+sentencepiece
 vllm-client
 requests
 openai
 lxml
+
+# Because of the tokenizers
+transformers
+
+# Because of Yi's tokenizer
+protobuf

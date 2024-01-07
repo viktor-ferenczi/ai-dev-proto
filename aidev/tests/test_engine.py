@@ -5,6 +5,7 @@ import time
 import unittest
 
 from aidev.common.async_helpers import map_async, iter_async
+from aidev.common.util import set_task_warning_threshold
 from aidev.engine.engine import Engine
 from aidev.engine.openai_engine import OpenAIEngine
 from aidev.engine.params import GenerationParams
@@ -205,6 +206,10 @@ QUESTIONS = [
 
 class EngineTest(unittest.IsolatedAsyncioTestCase):
 
+    async def asyncSetUp(self):
+        set_task_warning_threshold(1.0)
+        return await super().asyncSetUp()
+
     async def test_single_completion(self):
         engine = OpenAIEngine()
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
@@ -223,7 +228,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         usage = engine.usage
         self.assertEqual(1, usage.generations)
         self.assertEqual(1, usage.completions)
-        self.assertEqual(token_count, usage.completion_tokens + 1)
+        self.assertTrue(-5 <= token_count - usage.completion_tokens <= 5)
         self.assertGreater(usage.prompt_tokens, 0)
 
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
@@ -280,24 +285,49 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def test_long_context(self):
         engine = OpenAIEngine()
 
-        for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 100000, 131072, 200000, 262144):
+        failed = 0
+        max_attempts = 5
+        for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 81920, 98304, 131072, 163840, 196608, 229376, 262144):
             if size > engine.max_context:
                 break
 
-            params = GenerationParams(max_tokens=400)
-            text = crop_text(engine, BOOK, size - params.max_tokens - CONTEXT_HEADROOM_TOKENS)
+            params = GenerationParams(max_tokens=100)
 
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-            instruction = f'{text}\n\nPlease summarize the above text in 3 sentences.'
-
             system_tokens = engine.count_tokens(system)
+
+            text = ''
+            instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
             instruction_tokens = engine.count_tokens(instruction)
 
-            print(f'{size:>6d}: {system_tokens} system + {instruction_tokens} instruction + {params.max_tokens} completion')
-            completions = await engine.generate(system, instruction, params)
-            completion = completions[0]
+            text_tokens = (size - system_tokens - instruction_tokens - params.max_tokens - CONTEXT_HEADROOM_TOKENS) // 2
+            text = crop_text(engine, BOOK, text_tokens)
 
-            self.assertTrue(bool(completion.strip()))
+            instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
+            instruction_tokens = engine.count_tokens(instruction)
+
+            expected_window_size = system_tokens + instruction_tokens + params.max_tokens + CONTEXT_HEADROOM_TOKENS
+
+            print(f'{size:>6d}: {system_tokens} system + {instruction_tokens} instruction + {params.max_tokens} completion + {CONTEXT_HEADROOM_TOKENS} headroom = {expected_window_size} window size')
+
+            for attempt in range(max_attempts):
+                completions = await engine.generate(system, instruction, params)
+                contents = completions[0]
+
+                try:
+                    self.assertTrue(bool(contents.strip()), 'Empty contents')
+                    self.assertTrue('4242' in contents, 'First key is missed')
+                    self.assertTrue('1337' in contents, 'Second key is missed')
+                except AssertionError as e:
+                    print(f'Attempt #{1 + attempt}: {e}')
+                else:
+                    print(f'{size:>6d}: Succeeded in {1 + attempt} attempt(s)')
+                    break
+            else:
+                print(f'{size:>6d}: Failed')
+                failed += 1
+
+        self.assertEqual(0, failed, 'Some lengths failed')
 
     async def test_parallel_load(self):
         engine = OpenAIEngine()

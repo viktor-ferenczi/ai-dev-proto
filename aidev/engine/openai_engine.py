@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import List
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -31,11 +31,18 @@ class OpenAIEngine(Engine):
 
     def __init__(self, base_url: str = '', api_key: str = '', model: str = '') -> None:
         super().__init__()
+
         self.base_url = base_url or C.OPENAI_BASE_URL
         self.api_key = api_key or C.OPENAI_KEY
         self.model = model or C.MODEL
         self.tokenizer = get_tokenizer(self.model)
         self.usage = Usage()
+
+        if self.model not in C._MODEL_NAMES:
+            raise ValueError(f'Unknown model: {model}; Valid model names: {", ".join(sorted(C._MODEL_NAMES.keys()))}')
+
+        self.max_context = C._CONTEXT_SIZE[self.model]
+        self.optimal_parallel_sequences = C._OPTIMAL_PARALLEL_SEQUENCES[self.model]
 
     def count_tokens(self, text: str) -> int:
         return self.tokenizer.count_tokens(text)
