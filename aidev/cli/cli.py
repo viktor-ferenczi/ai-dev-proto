@@ -5,6 +5,7 @@ import os
 from typing import Optional
 
 from aidev.common.config import C
+from aidev.common.util import set_task_warning_threshold
 from aidev.developer.developer import Developer
 from aidev.developer.project import Project
 from aidev.engine.openai_engine import OpenAIEngine
@@ -49,7 +50,7 @@ class ArgParser(argparse.ArgumentParser):
         return '\n'.join(subcommand_helps)
 
 
-def main(argv: Optional[list[str]] = None):
+async def main(argv: Optional[list[str]] = None):
     if argv is None:
         argv = sys.argv[1:]
 
@@ -94,25 +95,27 @@ def main(argv: Optional[list[str]] = None):
     print(f'Project directory: {project_dir}')
     print(f'Branch name: {branch}')
 
+    set_task_warning_threshold(1.0)
+
     project = Project(project_dir, project_name)
     subparser = parser.subparsers.choices[command]
     subparser_argument_names = [action.dest for action in subparser._actions if action.__class__.__name__.startswith('_Store')]
-    COMMANDS[command](project, branch, **{name: getattr(args, name) for name in subparser_argument_names})
+    await COMMANDS[command](project, branch, **{name: getattr(args, name) for name in subparser_argument_names})
 
 
-def command_fix(project: Project, branch: str, source: str):
+async def command_fix(project: Project, branch: str, source: str):
     assert source == 'sonar', source
     sonar = SonarClient(project.project_name)
     engine = OpenAIEngine()
     developer = Developer(project, sonar, engine)
-    asyncio.run(developer.fix_issues(branch))
+    await developer.fix_issues(branch)
 
 
-def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
+async def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
     engine = OpenAIEngine()
     # FIXME: Refactor the code to allow for working without sonar
     developer = Developer(project, None, engine)
-    asyncio.run(developer.create_test_fixtures(branch, keep))
+    await developer.create_test_fixtures(branch, keep)
 
 
 COMMANDS = {
@@ -121,4 +124,4 @@ COMMANDS = {
 }
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
