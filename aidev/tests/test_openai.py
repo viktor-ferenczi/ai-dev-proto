@@ -7,7 +7,7 @@ import unittest
 
 from aidev.common.config import C
 from aidev.common.async_helpers import AsyncPool
-from aidev.common.util import set_task_warning_threshold
+from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.tokenizer import tokenizer
 
 SCRIPT_DIR = os.path.dirname(__file__)
@@ -318,7 +318,7 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
     max_parallel_connections = 16
 
     async def asyncSetUp(self):
-        set_task_warning_threshold(1.0)
+        set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
         return await super().asyncSetUp()
 
     async def test_generation(self):

@@ -5,7 +5,8 @@ import time
 import unittest
 
 from aidev.common.async_helpers import map_async, iter_async
-from aidev.common.util import set_task_warning_threshold
+from aidev.common.config import C
+from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.engine.engine import Engine
 from aidev.engine.openai_engine import OpenAIEngine
 from aidev.engine.params import GenerationParams
@@ -207,7 +208,7 @@ QUESTIONS = [
 class EngineTest(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
-        set_task_warning_threshold(1.0)
+        set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
         return await super().asyncSetUp()
 
     async def test_single_completion(self):

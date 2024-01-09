@@ -6,7 +6,7 @@ from typing import Iterable
 
 
 # Reduce the warnings about long-running tasks
-def set_task_warning_threshold(duration: float):
+def set_slow_callback_duration_threshold(duration: float):
     asyncio.get_running_loop().slow_callback_duration = duration
 
 
