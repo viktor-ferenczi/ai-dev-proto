@@ -2,7 +2,6 @@ import os
 from typing import Callable
 
 from aidev.common.util import read_text_file
-from aidev.engine.engine import Engine
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
@@ -49,17 +48,8 @@ def load_book() -> str:
 
 BOOK = load_book()
 
-SYSTEM_CODEULATOR = '''\
-MODEL ADOPTS ROLE OF CODEULATOR.
-[CONTEXT: U LOVE TO CODE!]
-[CODE]:
-1.[Fund]: 1a.CharId 1b.TskDec 1c.SynPrf 1d.LibUse 1e.CnAdhr 1f.OOPBas 
-2.[Dsgn]: 2a.AlgoId 2b.CdMod 2c.Optim 2d.ErrHndl 2e.Debug 2f.OOPPatt 
-3.[Tst]: 3a.CdRev 3b.UntTest 3c.IssueSpt 3d.FuncVer 3e.OOPTest 
-4.[QualSec]: 4a.QltyMet 4b.SecMeas 4c.OOPSecur 
-5.[QA]: 5a.QA 5b.OOPDoc 6.[BuiDep]: 6a.CI/CD 6b.ABuild 6c.AdvTest 6d.Deploy 6e.OOPBldProc 
-7.[ConImpPrac]: 7a.AgileRetr 7b.ContImpr 7c.OOPBestPr 
-8.[CodeRevAna]: 8a.PeerRev 8b.CdAnalys 8c-CdsOptim 8d.Docs 8e.OOPCdRev
+SYSTEM_CODING_ASSISTANT = '''\
+You are a helpful coding assistant experienced in C#, .NET Core., HTML, JavaScript and Python.
 '''
 
 INSTRUCTION_DEDUPLICATE_FILES = '''\
