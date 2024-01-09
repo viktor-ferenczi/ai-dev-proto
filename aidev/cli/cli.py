@@ -5,7 +5,7 @@ import os
 from typing import Optional
 
 from aidev.common.config import C
-from aidev.common.util import set_task_warning_threshold
+from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.developer.developer import Developer
 from aidev.developer.project import Project
 from aidev.engine.openai_engine import OpenAIEngine
@@ -95,7 +95,7 @@ async def main(argv: Optional[list[str]] = None):
     print(f'Project directory: {project_dir}')
     print(f'Branch name: {branch}')
 
-    set_task_warning_threshold(1.0)
+    set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
 
     project = Project(project_dir, project_name)
     subparser = parser.subparsers.choices[command]
