@@ -2,6 +2,7 @@ import asyncio
 import difflib
 import os
 import re
+from enum import Enum
 from typing import Iterable
 
 
@@ -112,3 +113,16 @@ def extract_code_from_completion(completion: str) -> (str, str):
         return 'Empty code', ''
 
     return code, ''
+
+
+def copy_indent(example: str, text: str) -> str:
+    return example[:-len(example.lstrip())] + text.lstrip()
+
+
+class SimpleEnum(Enum):
+
+    def __str__(self):
+        return f"{self.name}"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}.{self.name}"

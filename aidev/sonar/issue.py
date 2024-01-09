@@ -2,18 +2,9 @@ from pydantic import BaseModel
 from typing import List
 from datetime import datetime
 
-from enum import Enum
+from aidev.common.util import SimpleEnum
 
 UNKNOWN_DATETIME = datetime.utcfromtimestamp(0)
-
-
-class SimpleEnum(Enum):
-
-    def __str__(self):
-        return f"{self.name}"
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}.{self.name}"
 
 
 class BooleanChoice(SimpleEnum):

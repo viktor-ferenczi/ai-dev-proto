@@ -1,9 +1,9 @@
 from pydantic import BaseModel
 
 from ..common.config import C
-from ..common.util import count_changed_lines, write_text_file
+from ..common.util import count_changed_lines, write_text_file, SimpleEnum
 from ..engine.params import GenerationParams
-from ..sonar.issue import Issue, SimpleEnum
+from ..sonar.issue import Issue
 
 
 class AttemptState(SimpleEnum):
