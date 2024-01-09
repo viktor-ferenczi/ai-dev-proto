@@ -107,8 +107,12 @@ class TestEditingModel(unittest.TestCase):
         for i, p in enumerate(hunk.placeholders):
             replacement = replacement.replace(f'PLACEHOLDER{i}', p.id)
         replacement = replacement.split('\n')
-        edited_doc = doc.apply_replacements({hunk.id: replacement})
+
+        edited_doc = doc.apply_replacements({})
         reference = list(doc.lines)
+        self.assertEquals('\n'.join(reference), '\n'.join(edited_doc.lines))
+
+        edited_doc = doc.apply_replacements({hunk.id: replacement})
         reference[77] = '            return true;'
         del reference[74]
         self.assertEquals(doc.path, edited_doc.path)

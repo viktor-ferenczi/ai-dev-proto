@@ -12,3 +12,6 @@ transformers
 
 # Because of Yi's tokenizer
 protobuf
+
+# Development and testing
+coverage

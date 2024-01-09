@@ -120,10 +120,6 @@ class Block(BaseModel):
     end: int
     """Zero-based index of the first line after the block (one less than line number)"""
 
-    @property
-    def line_count(self) -> int:
-        return self.end - self.begin
-
     def is_overlapping(self, other: 'Block') -> bool:
         return self.begin < other.end and self.end > other.begin
 
@@ -134,17 +130,17 @@ class Block(BaseModel):
     def insort(items: list[Any], item: Any, name: str):
         """Insertion sort for sorted list objects having a `block: Block` property
         """
-        if item in items:
+        if item in items:  # pragma: no cover
             raise ValueError(f'This {name} has already been added: {item!r}')
 
         bisect.insort(items, item, key=lambda p: p.block.begin)
 
         i = items.index(item)
 
-        if i > 0 and items[i - 1].is_overlapping(item):
+        if i > 0 and items[i - 1].is_overlapping(item):  # pragma: no cover
             raise ValueError(f'Overlapping {name}: {item!r}, {items[i - 1]!r}')
 
-        if i + 1 < len(items) and item.is_overlapping(items[i + 1]):
+        if i + 1 < len(items) and item.is_overlapping(items[i + 1]):  # pragma: no cover
             raise ValueError(f'Overlapping {name}: {item!r}, {items[i + 1]!r}')
 
 
@@ -185,7 +181,7 @@ class Hunk(BaseModel):
     """Sorted placeholders, they cannot overlap"""
 
     def add_placeholder(self, placeholder: Placeholder):
-        if not placeholder.block.is_inside(self.block):
+        if not placeholder.block.is_inside(self.block):  # pragma: no cover
             raise ValueError(f'The placeholder ({placeholder.block!r}) is not contained by the hunk ({self.block!r})')
 
         Block.insort(self.placeholders, placeholder, 'placeholder')
@@ -218,14 +214,18 @@ class Hunk(BaseModel):
             # Text lines before the placeholder
             yield from document.lines[position:placeholder.block.begin]
 
-            # Formatted placeholder at the same indentation level as the first non-blank line in its original contents
+            # Placeholder to match the indentation level of the excluded block
             formatted_id = placeholder.format_id(document.doctype)
-            for line in document.lines[placeholder.block.begin:placeholder.block.end]:
-                if line.lstrip():
-                    yield copy_indent(line, formatted_id)
-                    break
-            else:
-                yield formatted_id
+            indent_example = ''
+            excluded_lines = document.lines[placeholder.block.begin:placeholder.block.end]
+            for line in excluded_lines:
+                if indent_example:
+                    if line.lstrip():
+                        indent_example = line
+                        break
+                elif line:
+                    indent_example = line
+            yield copy_indent(indent_example, formatted_id)
 
             # Skip the original text lines behind the placeholder
             position = placeholder.block.end
@@ -251,7 +251,7 @@ class Hunk(BaseModel):
             else:
                 lines.append(line)
 
-        if placeholder_map:
+        if placeholder_map:  # pragma: no cover
             raise ValueError(f'Missing placeholders: {sorted(placeholder_map)!r}')
 
         return lines
@@ -277,7 +277,7 @@ class Document(BaseModel):
         return len(self.lines)
 
     def is_valid_block(self, block: Block) -> bool:
-        return 0 <= block.begin <= block.end <= self.line_count
+        return 0 <= block.begin < block.end <= self.line_count
 
     def add_hunk(self, hunk: Hunk):
         Block.insort(self.hunks, hunk, 'hunk')
@@ -294,7 +294,7 @@ class Document(BaseModel):
         return hunk
 
     def edit_block(self, block: Block) -> Hunk:
-        if not self.is_valid_block(block):
+        if not self.is_valid_block(block):  # pragma: no cover
             raise ValueError(f'Invalid block for this document of {self.line_count} lines: {block!r}')
 
         hunk = Hunk(
@@ -315,11 +315,6 @@ class Document(BaseModel):
     def from_text(cls, path: str, text: str) -> 'Document':
         doctype = DocType.from_path(path)
         lines: list[str] = text.split('\n')
-
-        # Ensure a trailing newline, so hunks can end there
-        if not lines or lines[-1]:
-            lines.append('')
-
         return cls(path=path, doctype=doctype, lines=lines)
 
     def write(self):
@@ -353,7 +348,7 @@ class Document(BaseModel):
 
         lines.extend(self.lines[position:])
 
-        if replacements:
+        if replacements:  # pragma: no cover
             raise ValueError(f'Unknown hunk IDs: {list(replacements)!r}')
 
         edited_document = Document(
