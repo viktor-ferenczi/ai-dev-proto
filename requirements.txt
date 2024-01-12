@@ -6,6 +6,7 @@ vllm-client
 requests
 openai
 lxml
+lark
 
 # Because of the tokenizers
 transformers
