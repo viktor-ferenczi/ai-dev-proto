@@ -16,6 +16,11 @@ from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTI
 
 # Questions taken from https://codeburst.io/100-coding-interview-questions-for-programmers-b1cf74885fb7
 
+LIST_GRAMMAR = r'''
+?start: DIGIT+ ( "," DIGIT+ )* _WS?
+%import common.DIGIT
+%import common.WS -> _WS
+'''
 
 class EngineTest(unittest.IsolatedAsyncioTestCase):
 
@@ -171,3 +176,21 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         usage = engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
+
+    async def test_grammar(self):
+        engine = OpenAIEngine()
+
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = 'Write down the first 10 prime numbers as a comma separated list on a single line. Do not write anything else.'
+
+        params = GenerationParams(max_tokens=50, grammar=LIST_GRAMMAR)
+
+        started = time.perf_counter()
+        completions = await engine.generate(system, instruction, params)
+        finished = time.perf_counter()
+        duration = finished - started
+
+        usage = engine.usage
+        print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
+
+        self.assertEqual('2,3,5,7,11,13,17,19,23,29\n', completions[0])

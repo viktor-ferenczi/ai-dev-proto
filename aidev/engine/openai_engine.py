@@ -1,7 +1,10 @@
 import json
-from typing import List
+from typing import List, Type, overload
+from typing_extensions import Literal
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RequestOptions
+from openai._base_client import _AsyncStreamT
+from openai._types import ResponseT, Body, RequestFiles
 from pydantic import BaseModel
 
 from .engine import Engine
@@ -27,6 +30,17 @@ class Usage(BaseModel):
         self.__dict__.update(data)
 
 
+class CustomAsyncOpenAI(AsyncOpenAI):
+
+    async def post(self, path: str, *, cast_to: Type[ResponseT], body: Body | None = None, files: RequestFiles | None = None, options: RequestOptions = {}, stream: bool = False, stream_cls: type[_AsyncStreamT] | None = None) -> ResponseT | _AsyncStreamT:
+        grammar = options.get('extra_json', {}).pop('grammar', '')
+
+        if grammar:
+            body['grammar'] = grammar
+            
+        return await super().post(path, cast_to=cast_to, body=body, files=files, options=options, stream=stream, stream_cls=stream_cls)
+
+
 class OpenAIEngine(Engine):
 
     def __init__(self, base_url: str = '', api_key: str = '', model: str = '') -> None:
@@ -48,7 +62,7 @@ class OpenAIEngine(Engine):
         return self.tokenizer.count_tokens(text)
 
     async def generate(self, system: str, instruction: str, params: GenerationParams) -> List[str]:
-        client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
+        client = CustomAsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
         try:
             completion = await client.chat.completions.create(
                 messages=[
@@ -59,6 +73,7 @@ class OpenAIEngine(Engine):
                 max_tokens=params.max_tokens,
                 temperature=params.temperature,
                 n=params.number_of_completions,
+                extra_body={'grammar': params.grammar},
             )
         finally:
             await client.close()
