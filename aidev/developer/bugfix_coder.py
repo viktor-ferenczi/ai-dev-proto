@@ -188,7 +188,7 @@ class BugfixCoder(BaseCoder):
         )
 
         completions = await self.engine.generate(system, instruction, params)
-        assert len(completions) == params.number_of_completions
+        assert len(completions) == params.n
 
         def new_attempt(completion: str) -> Attempt:
             replacement, error_ = extract_replacement_from_completion(original, completion, top_marker)

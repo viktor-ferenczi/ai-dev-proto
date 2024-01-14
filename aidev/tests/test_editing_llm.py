@@ -3,8 +3,8 @@ import unittest
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.editing.model import Document
-from aidev.engine.openai_engine import OpenAIEngine
 from aidev.engine.params import GenerationParams
+from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT
 
 
@@ -20,7 +20,7 @@ class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
         hunk = self.document.edit()
         code_block = hunk.get_code_block_for_editing(self.document)
 
-        engine = OpenAIEngine()
+        engine = VllmEngine()
         system = SYSTEM_CODING_ASSISTANT
         instruction = '''\
 Analyze the code below and make a few very concise suggestions on how to improve it.

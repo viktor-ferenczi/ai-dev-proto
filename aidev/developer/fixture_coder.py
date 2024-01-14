@@ -191,7 +191,7 @@ class FixtureCoder(BaseCoder):
         )
 
         completions = await self.engine.generate(system, instruction, params)
-        assert len(completions) == params.number_of_completions
+        assert len(completions) == params.n
 
         def new_attempt(completion: str) -> Attempt:
             code, error_ = extract_code_from_completion(completion)

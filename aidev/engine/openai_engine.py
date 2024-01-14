@@ -1,14 +1,15 @@
-from typing import List
+from typing import List, Optional
 
 from openai import AsyncOpenAI
 
 from .engine import Engine
-from .params import GenerationParams
+from .params import GenerationParams, GenerationConstraint
 from .usage import Usage
 from ..common.config import C
 from ..tokenizer.tokenizer import get_tokenizer
 
 
+# API: https://github.com/openai/openai-python
 class OpenAIEngine(Engine):
 
     def __init__(self, model: str = '', base_url: str = '', api_key: str = '') -> None:
@@ -25,7 +26,16 @@ class OpenAIEngine(Engine):
     def count_tokens(self, text: str) -> int:
         return self.tokenizer.count_tokens(text)
 
-    async def generate(self, system: str, instruction: str, params: GenerationParams) -> List[str]:
+    async def generate(self,
+                       system: str,
+                       instruction: str,
+                       params: GenerationParams,
+                       constraint: Optional[GenerationConstraint] = None) -> List[str]:
+        if constraint is not None:
+            raise ValueError('Constraints are not supported with the OpenAI API')
+        if params.use_beam_search:
+            raise ValueError('Beam search is not supported with the OpenAI API')
+
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": instruction}
@@ -38,7 +48,7 @@ class OpenAIEngine(Engine):
                 model=C.OPENAI_MODEL,
                 max_tokens=params.max_tokens,
                 temperature=params.temperature,
-                n=params.number_of_completions,
+                n=params.n,
             )
         finally:
             await client.close()
@@ -48,5 +58,5 @@ class OpenAIEngine(Engine):
         self.usage.prompt_tokens += completion.usage.prompt_tokens
         self.usage.completion_tokens += completion.usage.completion_tokens
 
-        assert len(completion.choices) == params.number_of_completions, (len(completion.choices), params.number_of_completions)
+        assert len(completion.choices) == params.n, (len(completion.choices), params.n)
         return [choice.message.content for choice in completion.choices]
