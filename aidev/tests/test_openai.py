@@ -11,7 +11,6 @@ from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.tests.data import SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, crop_text, BOOK, QUESTIONS
 from aidev.tokenizer import tokenizer
 
-SCRIPT_DIR = os.path.dirname(__file__)
 
 TOKENIZER = tokenizer.get_tokenizer(C.MODEL)
 count_tokens = TOKENIZER.count_tokens

@@ -1,60 +1,40 @@
-import json
 from typing import List
 
 from openai import AsyncOpenAI
-from pydantic import BaseModel
 
 from .engine import Engine
 from .params import GenerationParams
+from .usage import Usage
 from ..common.config import C
 from ..tokenizer.tokenizer import get_tokenizer
 
 
-class Usage(BaseModel):
-    generations: int = 0
-    completions: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-
-    def save(self, path: str):
-        data = self.model_dump_json(indent=2)
-        with open(path, 'wb') as f:
-            json.dump(data, f)
-
-    def load(self, path: str):
-        with open(path, 'rb') as f:
-            data = json.load(f)
-        self.__dict__.update(data)
-
-
 class OpenAIEngine(Engine):
 
-    def __init__(self, base_url: str = '', api_key: str = '', model: str = '') -> None:
-        super().__init__()
+    def __init__(self, model: str = '', base_url: str = '', api_key: str = '') -> None:
+        super().__init__(model)
 
         self.base_url = base_url or C.OPENAI_BASE_URL
         self.api_key = api_key or C.OPENAI_KEY
-        self.model = model or C.MODEL
         self.tokenizer = get_tokenizer(self.model)
         self.usage = Usage()
 
-        if self.model not in C._MODEL_NAMES:
-            raise ValueError(f'Unknown model: {model}; Valid model names: {", ".join(sorted(C._MODEL_NAMES.keys()))}')
-
-        self.max_context = C._CONTEXT_SIZE[self.model]
-        self.optimal_parallel_sequences = C._OPTIMAL_PARALLEL_SEQUENCES[self.model]
+        self.max_context = C.CONTEXT_SIZE[self.model]
+        self.optimal_parallel_sequences = C.OPTIMAL_PARALLEL_SEQUENCES[self.model]
 
     def count_tokens(self, text: str) -> int:
         return self.tokenizer.count_tokens(text)
 
     async def generate(self, system: str, instruction: str, params: GenerationParams) -> List[str]:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": instruction}
+        ]
+
         client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
         try:
             completion = await client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": instruction}
-                ],
+                messages=messages,
                 model=C.OPENAI_MODEL,
                 max_tokens=params.max_tokens,
                 temperature=params.temperature,

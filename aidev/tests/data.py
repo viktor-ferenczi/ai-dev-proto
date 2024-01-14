@@ -39,6 +39,9 @@ def crop_text(count_tokens: Callable[[str], int], text: str, max_tokens: int, se
     return result
 
 
+# This test works only with DeepSeek's tokenizer
+# assert crop_text(OpenAIEngine(), 'First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
+
 def load_book() -> str:
     path = os.path.join(SCRIPT_DIR, 'pg18857.txt')
     book = read_text_file(path)
@@ -79,6 +82,7 @@ Further instructions:
 - You are an expert developer, you can code this simple task very well.
 '''
 
+# Questions taken from https://codeburst.io/100-coding-interview-questions-for-programmers-b1cf74885fb7
 QUESTIONS = [
     'How is a bubble sort algorithm implemented?',
     'How is a merge sort algorithm implemented?',

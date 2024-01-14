@@ -6,39 +6,40 @@ import unittest
 from aidev.common.async_helpers import map_async, iter_async
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold
-from aidev.engine.openai_engine import OpenAIEngine
+from aidev.engine.engine import Engine
 from aidev.engine.params import GenerationParams
+from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
 
-# This test works only with DeepSeek's tokenizer
-# assert crop_text(OpenAIEngine(), 'First. Paragraph.\n\nSecond. Paragraph.\n\nThird. Paragraph.', 14) == 'First. Paragraph.\n\nSecond. '
-
-# Questions taken from https://codeburst.io/100-coding-interview-questions-for-programmers-b1cf74885fb7
-
-
 class EngineTest(unittest.IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
+        self.engine: Engine = VllmEngine()  # OpenAIEngine()
         return await super().asyncSetUp()
 
+    async def asyncTearDown(self):
+        del self.engine
+        return await super().asyncTearDown()
+
+    def create_engine(self):
+        raise NotImplementedError()
+
     async def test_single_completion(self):
-        engine = OpenAIEngine()
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = 'How is an iterative quicksort algorithm implemented?'
         params = GenerationParams(max_tokens=300)
 
         started = time.perf_counter()
-        completions = await engine.generate(system, instruction, params)
+        completions = await self.engine.generate(system, instruction, params)
         finished = time.perf_counter()
         duration = finished - started
 
         self.assertEqual(1, len(completions))
         completion = completions[0]
-        token_count = engine.count_tokens(completion)
+        token_count = self.engine.count_tokens(completion)
 
-        usage = engine.usage
+        usage = self.engine.usage
         self.assertEqual(1, usage.generations)
         self.assertEqual(1, usage.completions)
         self.assertTrue(-5 <= token_count - usage.completion_tokens <= 5)
@@ -48,19 +49,18 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         print(f'Output:\n{completion}')
 
     async def test_multiple_completions(self):
-        engine = OpenAIEngine()
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = 'How is an iterative quicksort algorithm implemented?'
         params = GenerationParams(max_tokens=300, number_of_completions=16)
 
         started = time.perf_counter()
-        completions = await engine.generate(system, instruction, params)
+        completions = await self.engine.generate(system, instruction, params)
         finished = time.perf_counter()
         duration = finished - started
 
         self.assertEqual(params.number_of_completions, len(completions))
 
-        usage = engine.usage
+        usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
 
         for index, completion in enumerate(completions):
@@ -68,7 +68,6 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(bool(completion.strip()))
 
     async def test_coding(self):
-        engine = OpenAIEngine()
         params = GenerationParams(max_tokens=2000)
 
         print('SYSTEM:')
@@ -80,7 +79,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         print()
 
         started = time.perf_counter()
-        completions = await engine.generate(SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, params)
+        completions = await self.engine.generate(SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, params)
         finished = time.perf_counter()
         duration = finished - started
 
@@ -88,7 +87,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         completion = completions[0]
 
-        usage = engine.usage
+        usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
 
         print(f'COMPLETION:\n{completion}')
@@ -96,38 +95,36 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(bool(completion.strip()))
 
     async def test_long_context(self):
-        engine = OpenAIEngine()
-
         context_headroom_tokens = 100
 
         failed = 0
         max_attempts = 5
 
         for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 81920, 98304, 131072, 163840, 196608, 229376, 262144):
-            if size > engine.max_context:
+            if size > self.engine.max_context:
                 break
 
             params = GenerationParams(max_tokens=100)
 
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-            system_tokens = engine.count_tokens(system)
+            system_tokens = self.engine.count_tokens(system)
 
             text = ''
             instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
-            instruction_tokens = engine.count_tokens(instruction)
+            instruction_tokens = self.engine.count_tokens(instruction)
 
             text_tokens = (size - system_tokens - instruction_tokens - params.max_tokens - context_headroom_tokens) // 2
-            text = crop_text(engine.count_tokens, BOOK, text_tokens)
+            text = crop_text(self.engine.count_tokens, BOOK, text_tokens)
 
             instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
-            instruction_tokens = engine.count_tokens(instruction)
+            instruction_tokens = self.engine.count_tokens(instruction)
 
             expected_window_size = system_tokens + instruction_tokens + params.max_tokens + context_headroom_tokens
 
             print(f'{size:>6d}: {system_tokens} system + {instruction_tokens} instruction + {params.max_tokens} completion + {context_headroom_tokens} headroom = {expected_window_size} window size')
 
             for attempt in range(max_attempts):
-                completions = await engine.generate(system, instruction, params)
+                completions = await self.engine.generate(system, instruction, params)
                 contents = completions[0]
 
                 try:
@@ -146,21 +143,19 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, failed, 'Some lengths failed')
 
     async def test_parallel_load(self):
-        engine = OpenAIEngine()
-
         context_headroom_tokens = 100
 
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-        system_tokens = engine.count_tokens(system)
+        system_tokens = self.engine.count_tokens(system)
 
         async def generate(instruction: str) -> str:
-            instruction_tokens = engine.count_tokens(instruction)
-            params = GenerationParams(max_tokens=engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens)
-            completions = await engine.generate(system, instruction, params)
+            instruction_tokens = self.engine.count_tokens(instruction)
+            params = GenerationParams(max_tokens=self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens)
+            completions = await self.engine.generate(system, instruction, params)
             return completions[0]
 
         started = time.perf_counter()
-        outputs = [completions[0] async for completions in map_async(generate, iter_async(QUESTIONS), max_tasks=engine.optimal_parallel_sequences)]
+        outputs = [completions[0] async for completions in map_async(generate, iter_async(QUESTIONS), max_tasks=self.engine.optimal_parallel_sequences)]
         finished = time.perf_counter()
         duration = finished - started
 
@@ -169,5 +164,5 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         for output in outputs:
             self.assertTrue(bool(output.strip()))
 
-        usage = engine.usage
+        usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')

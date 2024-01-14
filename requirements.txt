@@ -6,6 +6,8 @@ vllm-client
 requests
 openai
 lxml
+vllm-client
+jinja2
 
 # Because of the tokenizers
 transformers
