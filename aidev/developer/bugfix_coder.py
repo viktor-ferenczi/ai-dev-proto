@@ -173,7 +173,7 @@ class BugfixCoder(BaseCoder):
             issue_description=issue.message,
             issue_category=f'{issue.cleanCodeAttribute} ({issue.cleanCodeAttributeCategory})',
             issue_severity=issue.severity,
-            code_lines='\n'.join(original.split('\n')[rng.startLine - 1:rng.endLine])
+            code_lines=join_lines(original.split('\n')[rng.startLine - 1:rng.endLine])
         )
 
         system_token_count = self.engine.count_tokens(system)

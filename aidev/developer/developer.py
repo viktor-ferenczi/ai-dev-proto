@@ -142,7 +142,7 @@ class Developer:
             table_name: [row[0] for row in dumper.iter_rows(table_name)]
             for table_name in table_names
         }
-        formatted_db_ids = '\n'.join(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
+        formatted_db_ids = join_lines(f'{table_name}: {ids!r}' for table_name, ids in db_ids.items())
         info = f'''\
 Valid database IDs by table name:
 ```

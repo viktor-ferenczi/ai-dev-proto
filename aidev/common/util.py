@@ -3,7 +3,7 @@ import difflib
 import os
 import re
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, TypeVar, Tuple
 
 from jinja2 import Template, Environment
 
@@ -26,6 +26,10 @@ def get_next_free_numbered_file(issue_log_dir: str) -> int:
 
 def split_to_lines_and_clean(text: str) -> list[str]:
     return [line for line in (line.rstrip() for line in text.splitlines()) if line]
+
+
+def join_lines(lines: Iterable[str]) -> str:
+    return '\n'.join(lines)
 
 
 def count_changed_lines(original: str, replacement: str) -> int:
@@ -94,11 +98,11 @@ def iter_tree(basedir: str) -> Iterable[str]:
 
 
 def keep_lines(text: str, rx: re.Pattern, separator='\n') -> str:
-    return '\n'.join(line for line in text.split(separator) if rx.match(line) is not None)
+    return join_lines(line for line in text.split(separator) if rx.match(line) is not None)
 
 
 def remove_lines(text: str, rx: re.Pattern, separator='\n') -> str:
-    return '\n'.join(line for line in text.split(separator) if rx.match(line) is None)
+    return join_lines(line for line in text.split(separator) if rx.match(line) is None)
 
 
 def extract_code_from_completion(completion: str) -> (str, str):
