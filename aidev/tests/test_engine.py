@@ -1,13 +1,15 @@
-# API: https://github.com/openai/openai-python
+import json
 import time
 
 import unittest
+
+from pydantic import BaseModel
 
 from aidev.common.async_helpers import map_async, iter_async
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.engine.engine import Engine
-from aidev.engine.params import GenerationParams
+from aidev.engine.params import GenerationParams, JsonSchemaConstraint, RegexConstraint, GrammarConstraint
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
@@ -58,7 +60,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         finished = time.perf_counter()
         duration = finished - started
 
-        self.assertEqual(params.number_of_completions, len(completions))
+        self.assertEqual(params.n, len(completions))
 
         usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
@@ -166,3 +168,59 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
+
+    async def test_json_schema_constraint(self):
+        class Fruit(BaseModel):
+            kind: str
+            color: str
+            count: int
+            weight: float
+            sweet: bool
+
+        schema = Fruit.model_json_schema()
+
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = f"Write a JSON describing a random fruit. It must conform to the following JSON schema: {json.dumps(schema)}"
+
+        params = GenerationParams(n=5, max_tokens=200, temperature=1.0)
+        constraint = JsonSchemaConstraint(schema)
+        completions = await self.engine.generate(system, instruction, params, constraint)
+
+        self.assertEqual(len(completions), params.n)
+
+        for completion in completions:
+            print(completion)
+            self.assertTrue(completion.startswith('{'))
+            self.assertTrue(completion.endswith('}'))
+            Fruit(**json.loads(completion))
+
+    async def test_regex_constraint(self):
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = f"Write down the first 10 prime numbers as a comma separated list."
+
+        params = GenerationParams(max_tokens=50, temperature=0.0)
+        constraint = RegexConstraint(r'\d+(\s*,\s*\d+)*\s*')
+        completions = await self.engine.generate(system, instruction, params, constraint)
+
+        self.assertEqual(len(completions), params.n)
+
+        for completion in completions:
+            self.assertEqual('2,3,5,7,11,13,17,19,23,29', completion.rstrip().replace(' ', ''))
+
+    # Does not work, see: https://github.com/outlines-dev/outlines/issues/534
+    async def test_grammar_constraint(self):
+        system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
+        instruction = f"Write down the first 10 prime numbers as a comma separated list."
+
+        params = GenerationParams(max_tokens=50, temperature=0.0)
+        constraint = GrammarConstraint(r'''\
+?start: DIGIT+ ( "," DIGIT+ )* _WS?
+%import common.DIGIT
+%import common.WS -> _WS
+''')
+        completions = await self.engine.generate(system, instruction, params, constraint)
+
+        self.assertEqual(len(completions), params.n)
+
+        for completion in completions:
+            self.assertEqual('2,3,5,7,11,13,17,19,23,29', completion.rstrip().replace(' ', ''))

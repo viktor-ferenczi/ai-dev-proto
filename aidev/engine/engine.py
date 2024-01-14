@@ -1,10 +1,8 @@
-import os.path
-from typing import List
+from typing import List, Optional
 
 from .usage import Usage
 from ..common.config import C
-from ..common.util import read_text_file
-from ..engine.params import GenerationParams
+from ..engine.params import GenerationParams, GenerationConstraint
 from ..tokenizer.tokenizer import get_tokenizer
 
 
@@ -24,5 +22,9 @@ class Engine:
     def count_tokens(self, text: str) -> int:
         raise NotImplementedError()
 
-    async def generate(self, system: str, instruction: str, params: GenerationParams) -> List[str]:
+    async def generate(self,
+                       system: str,
+                       instruction: str,
+                       params: GenerationParams,
+                       constraint: Optional[GenerationConstraint] = None) -> List[str]:
         raise NotImplementedError()
