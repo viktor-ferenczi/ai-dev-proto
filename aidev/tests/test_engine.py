@@ -8,7 +8,7 @@ from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.engine.openai_engine import OpenAIEngine
 from aidev.engine.params import GenerationParams
-from aidev.tests.data import crop_text, BOOK, SYSTEM_CODEULATOR, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
+from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
 
 # This test works only with DeepSeek's tokenizer
@@ -72,7 +72,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         params = GenerationParams(max_tokens=2000)
 
         print('SYSTEM:')
-        print(SYSTEM_CODEULATOR)
+        print(SYSTEM_CODING_ASSISTANT)
         print()
 
         print('INSTRUCTION:')
@@ -80,7 +80,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         print()
 
         started = time.perf_counter()
-        completions = await engine.generate(SYSTEM_CODEULATOR, INSTRUCTION_DEDUPLICATE_FILES, params)
+        completions = await engine.generate(SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, params)
         finished = time.perf_counter()
         duration = finished - started
 

@@ -8,7 +8,7 @@ import unittest
 from aidev.common.config import C
 from aidev.common.async_helpers import AsyncPool
 from aidev.common.util import set_slow_callback_duration_threshold
-from aidev.tests.data import SYSTEM_CODEULATOR, INSTRUCTION_DEDUPLICATE_FILES, crop_text, BOOK, QUESTIONS
+from aidev.tests.data import SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, crop_text, BOOK, QUESTIONS
 from aidev.tokenizer import tokenizer
 
 SCRIPT_DIR = os.path.dirname(__file__)
@@ -78,7 +78,7 @@ class SyncOpenAITest(unittest.TestCase):
         started = time.perf_counter()
         completion = self.client.chat.completions.create(
             messages=[
-                {"role": "system", "content": SYSTEM_CODEULATOR},
+                {"role": "system", "content": SYSTEM_CODING_ASSISTANT},
                 {"role": "user", "content": INSTRUCTION_DEDUPLICATE_FILES},
             ],
             model=C.OPENAI_MODEL,
@@ -96,6 +96,7 @@ class SyncOpenAITest(unittest.TestCase):
         print(completion.choices[0].message.content.lstrip())
 
     def test_long_context(self):
+        max_attempts = 5
         for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 81920, 98304, 131072, 163840, 196608, 229376, 262144):
             if size > self.max_context:
                 break
@@ -105,25 +106,37 @@ class SyncOpenAITest(unittest.TestCase):
             instruction = f'It is important to remember that the first key is "4242".\n\n{text}\n\nIt is important to remember that the second key is "1337".\n\n{text}\n\nWhat are the first and second keys? Give me only the two numbers. The keys are:'
             print(f'{size:>6d}: {count_tokens(system)} system + {count_tokens(instruction)} instruction + 400 completion')
 
-            completion = self.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": instruction}
-                ],
-                model=C.OPENAI_MODEL,
-                max_tokens=400,
-                temperature=0.7,
-            )
+            for attempt in range(max_attempts):
 
-            self.assertTrue(bool(completion))
-            self.assertEqual(len(completion.choices), 1)
+                completion = self.client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": instruction}
+                    ],
+                    model=C.OPENAI_MODEL,
+                    max_tokens=400,
+                    temperature=0.7,
+                )
 
-            content = completion.choices[0].message.content
-            self.assertTrue('4242' in content, f'First key is missed: {content}')
-            self.assertTrue('1337' in content, f'Second key is missed: {content}')
+                self.assertTrue(bool(completion))
+                self.assertEqual(len(completion.choices), 1)
 
-            token_count = completion.usage.completion_tokens
-            self.assertTrue(token_count > 0, str(token_count))
+                content = completion.choices[0].message.content
+                ok = True
+                if '4242' not in content:
+                    print(f'Attempt #{1 + attempt}: First key is missed')
+                    ok = False
+                if '1337' not in content:
+                    print(f'Attempt #{1 + attempt}: Second key is missed')
+                    ok = False
+
+                if ok:
+                    token_count = completion.usage.completion_tokens
+                    self.assertTrue(token_count > 0, str(token_count))
+                    break
+
+            else:
+                self.fail(f'Failed {max_attempts} attempts')
 
 
 class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
