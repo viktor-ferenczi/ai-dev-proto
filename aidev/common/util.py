@@ -5,6 +5,10 @@ import re
 from enum import Enum
 from typing import Iterable
 
+from jinja2 import Template, Environment
+
+from .config import C
+
 
 # Reduce the warnings about long-running tasks
 def set_slow_callback_duration_threshold(duration: float):
@@ -126,3 +130,11 @@ class SimpleEnum(Enum):
 
     def __repr__(self):
         return f"{self.__class__.__name__}.{self.name}"
+
+
+def get_prompt_template_for_model(model: str) -> Template:
+    prompt_template_name = C.PROMPT_TEMPLATES[model]
+    source = read_text_file(os.path.join(C.PROMPT_TEMPLATES_DIR, f'{prompt_template_name}.jinja'))
+    environment = Environment()
+    prompt_template = environment.from_string(source)
+    return prompt_template

@@ -165,10 +165,10 @@ class BugfixCoder(BaseCoder):
 
         system = SYSTEM
         extension = path.rsplit('.')[-1].lower()
-        top_marker = C._TOP_MARKER_BY_EXTENSION.get(extension)
+        top_marker = C.TOP_MARKER_BY_EXTENSION.get(extension)
         instruction = INSTRUCTION.format(
             source=original,
-            doctype=C._DOCTYPE_BY_EXTENSION.get(extension, ''),
+            doctype=C.DOCTYPE_BY_EXTENSION.get(extension, ''),
             top_marker=top_marker,
             issue_description=issue.message,
             issue_category=f'{issue.cleanCodeAttribute} ({issue.cleanCodeAttributeCategory})',

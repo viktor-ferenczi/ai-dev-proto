@@ -3,6 +3,8 @@ from typing import Dict, Iterable
 
 import toml
 
+AIDEV_PACKAGE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
+
 
 class Config:
     # Project (solution)
@@ -20,7 +22,7 @@ class Config:
     OPENAI_MODEL: str = os.getenv('AIDEV_OPENAI_MODEL', 'model')
 
     # vLLM API
-    VLLM_BASE_URL: str = os.getenv('AIDEV_VLLM_BASE_URL', 'http://127.0.0.1:8000/v1')
+    VLLM_BASE_URL: str = os.getenv('AIDEV_VLLM_BASE_URL', 'http://127.0.0.1:8000')
 
     # SonarQube API
     SONAR_BASE_URL: str = os.getenv('SONAR_BASE_URL', 'http://127.0.0.1:9000')
@@ -30,37 +32,52 @@ class Config:
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Markdown code block type by file extension
-    _DOCTYPE_BY_EXTENSION: Dict[str, str] = {
+    DOCTYPE_BY_EXTENSION: Dict[str, str] = {
         'cs': 'cs',
         'py': 'python',
         'cshtml': 'cshtml',
     }
 
     # Top of source marker by file extension
-    _TOP_MARKER_BY_EXTENSION: Dict[str, str] = {
+    TOP_MARKER_BY_EXTENSION: Dict[str, str] = {
         'cs': '// TOP_MARKER',
         'py': '# TOP_MARKER',
         'cshtml': '<!-- TOP_MARKER -->',
     }
 
     # Valid models
-    _MODEL_NAMES: Dict[str, str] = {
+    MODEL_NAMES: Dict[str, str] = {
         'codellama': 'CodeLlama',
         'deepseek-coder': 'DeepSeek Coder',
         'deepseek-llm': 'DeepSeek LLM',
         'yi': 'Yi',
     }
-    _CONTEXT_SIZE: Dict[str, int] = {
+
+    # Maximum context size of models
+    CONTEXT_SIZE: Dict[str, int] = {
         'codellama': 16384,  # Should work at 32k or even 64k, but it needs changes in engine config
         'deepseek-coder': 16384,
         'deepseek-llm': 4096,
         'yi': 65536,
     }
-    _OPTIMAL_PARALLEL_SEQUENCES: Dict[str, int] = {
+
+    # Optimal parallel sequence counts of models
+    OPTIMAL_PARALLEL_SEQUENCES: Dict[str, int] = {
         'codellama': 16,
         'deepseek-coder': 16,
         'deepseek-llm': 16,
         'yi': 16,
+    }
+
+    # Directory with the Jinja2 prompt templates
+    PROMPT_TEMPLATES_DIR = os.path.join(AIDEV_PACKAGE_DIR, 'templates')
+
+    # Prompt templates for each model
+    PROMPT_TEMPLATES = {
+        'codellama': 'llama-2-chat',
+        'deepseek-coder': 'deepseek-coder',
+        'deepseek-llm': 'deepseek-llm',
+        'yi': 'orca',
     }
 
     # Async
