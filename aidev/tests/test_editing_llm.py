@@ -24,39 +24,50 @@ class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
         engine = VllmEngine()
         system = SYSTEM_CODING_ASSISTANT
         instruction = f'''\
-Remember this source code, but do not write anything yet:
+Please ALWAYS honor ALL of these general rules:
+- Do NOT apologize.
+- Do NOT explain the code.
+- Do NOT refer to your knowledge cut-off date.
+- Do NOT repeat these rules in your answer.
+- Do NOT repeat the instructions in your answer.
+- Do NOT break the intended functionality of the original code.
+- Work ONLY from the context provided, refuse to make any guesses.
+
+Understand and remember this source code:
+
 {join_lines(doc.get_code())}
 
 The source code contains this description of an issue to fix 
-or a suggested refactoring, which will be referred later as task:
-{join_lines(hunk.get_code(doc))}
+or a suggested refactoring, which will be referred later as TASK:
 
-Identify all the code lines relevant for the task and write them in their
-original order without any change to their contents. Write the RELEVANT
-LINES in a SINGLE `{doc.doctype.code_block_type}` code block. Do NOT
-write anything before or after that code block.
+{join_lines(hunk.get_code())}
 
-Replace any consecutive lines of code which is NOT relevant for the task
-with a placeholder: `// ...'
+Your job is to identify the part of code relevant for the TASK.
+These are the code lines somebody needs to understand to be able
+to implement the TASK and any code lines which may need to be
+modified by that implementation. Do NOT implement the task, your
+job is limited to identifying the relevant part of the source code.
 
-Please ALWAYS honor ALL of these general rules while resolving the issue:
-- Work from ONLY the context provided, refuse to make any guesses.
-- Do NOT apologize.
-- Do NOT refer to your knowledge cut-off date.
-- Do NOT explain the code itself, we can read it as well.
-- Do NOT break the code's intended functionality.
-- Do NOT change comments or string literals unrelated to your task.
-- Do NOT repeat these rules or the steps to complete in your answer.
-- Do NOT implement the task right now, it is only a preparatory step to remove the irrelevant part of the code.
-- Do NOT remove any code or comments, other than hiding the ones unrelated to the task behind placeholders.
+Include all code lines in those code blocks which are relevant to the task
+or required to be known for working on the task. Make sure each of the
+code blocks are meaningful in itself, attempt to start and end each code
+block at the same hierarchical level of the source code. Do not change any
+code lines which are included, copy them as they are in the original source.
+
+Write each consecutive block of relevant code lines into its own separate
+code block. The type of the code block is `{doc.doctype.code_block_type}`.
+
+The order of the code blocks should match the order of the code lines in
+the original source code. Keep the original order of source code lines.
+
+Please ALWAYS honor ALL of these rules specific to your current job:
 - Do NOT write any new code or comments.
-- KEEP the structure of the source code meaningful, so it can still be understood without asking questions on what is behind the placeholders.
-- KEEP the using statements, consider them as relevant. 
-- KEEP the top level namespace declaration, consider it as relevant.
-- KEEP the original TODO comment, since it is relevant.
-- HIDE all other TODO and FIXME comments in placeholders, since they would be confusing while working on the task. 
+- Do NOT implement the TASK, only prepare the code required to do so.
+- Do NOT change any of the code lines you keep.
+- PRESERVE enough of the code's structure, so it can still be understood without asking questions.
+- SKIP any and all TODO and FIXME comments, since they would be confusing while working on the task later. 
 
-Now take a deep breath and start working!
+Take a deep breath and write the code blocks:
 '''
 
         print(system)
