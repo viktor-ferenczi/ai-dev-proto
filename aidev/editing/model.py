@@ -137,22 +137,33 @@ class Block(BaseModel):
     def is_inside(self, other: 'Block') -> bool:
         return self.begin >= other.begin and self.end <= other.end
 
-    @staticmethod
-    def insort(items: list[Any], item: Any, name: str):
-        """Insertion sort for sorted list objects having a `block: Block` property
-        """
-        if item in items:  # pragma: no cover
-            raise ValueError(f'This {name} has already been added: {item!r}')
+    def format_marker(self, doctype: DocType, name: str = 'Marker') -> str:
+        formatter = {
+            DocType.UNKNOWN: (lambda: f'**{name}#{self.begin}:{self.end}**'),
+            DocType.TEXT: (lambda: f'**{name}#{self.begin}:{self.end}**'),
+            DocType.MARKDOWN: (lambda: f'**{name}#{self.begin}:{self.end}**'),
+            DocType.PYTHON: (lambda: f'AiDev.{name}("{self.begin}:{self.end}")'),
+            DocType.CSHARP: (lambda: f'AiDev.{name}("{self.begin}:{self.end}");'),
+            DocType.CSHTML: (lambda: f'<span class="{name}">{self.begin}:{self.end}</span>'),
+        }[doctype]
+        return formatter()
 
-        bisect.insort(items, item, key=lambda p: p.block.begin)
 
-        i = items.index(item)
+def insort_block(blocks: list[Block], block: Block):
+    """Insertion sort for sorted list of blocks
+    """
+    if block in blocks:  # pragma: no cover
+        raise ValueError(f'This block has already been added: {block!r}')
 
-        if i > 0 and items[i - 1].is_overlapping(item):  # pragma: no cover
-            raise ValueError(f'Overlapping {name}: {item!r}, {items[i - 1]!r}')
+    bisect.insort(blocks, block, key=lambda p: p.begin)
 
-        if i + 1 < len(items) and item.is_overlapping(items[i + 1]):  # pragma: no cover
-            raise ValueError(f'Overlapping {name}: {item!r}, {items[i + 1]!r}')
+    i = blocks.index(block)
+
+    if i > 0 and blocks[i - 1].is_overlapping(block):  # pragma: no cover
+        raise ValueError(f'Overlapping block: {block!r}, {blocks[i - 1]!r}')
+
+    if i + 1 < len(blocks) and block.is_overlapping(blocks[i + 1]):  # pragma: no cover
+        raise ValueError(f'Overlapping block: {block!r}, {blocks[i + 1]!r}')
 
 
 class Document(BaseModel):
@@ -205,30 +216,6 @@ class Document(BaseModel):
         write_text_file(self.path, join_lines(self.lines))
 
 
-class Placeholder(BaseModel):
-    """Block of lines to exclude from editing in a hunk"""
-
-    id: str
-    """Unique identifier within the conversation LLMs can reproduce verbatim"""
-
-    block: Block
-    """Block relative to the document"""
-
-    def is_overlapping(self, other: 'Placeholder') -> bool:
-        return self.block.is_overlapping(other.block)
-
-    def format_id(self, doctype: DocType) -> str:
-        formatter = {
-            DocType.UNKNOWN: (lambda v: self.id),
-            DocType.TEXT: (lambda v: self.id),
-            DocType.MARKDOWN: (lambda v: f'`{self.id}`'),
-            DocType.PYTHON: (lambda v: f'# {self.id}'),
-            DocType.CSHARP: (lambda v: f'// {self.id}'),
-            DocType.CSHTML: (lambda v: f'<!-- {self.id} -->'),
-        }[doctype]
-        return formatter(id)
-
-
 class Hunk(BaseModel):
     """Block of lines to be edited inside a document"""
 
@@ -238,7 +225,7 @@ class Hunk(BaseModel):
     block: Block
     """Block of lines in the document"""
 
-    placeholders: list[Placeholder] = []
+    placeholders: list[Block] = []
     """Sorted placeholders, they cannot overlap"""
 
     replacement: Optional[list[str]] = None
@@ -258,19 +245,14 @@ class Hunk(BaseModel):
     def is_overlapping(self, other: 'Hunk') -> bool:
         return self.block.is_overlapping(other.block)
 
-    def add_placeholder(self, placeholder: Placeholder) -> None:
-        if not placeholder.block.is_inside(self.block):  # pragma: no cover
-            raise ValueError(f'The placeholder ({placeholder.block!r}) is not contained by the hunk ({self.block!r})')
+    def add_placeholder(self, placeholder: Block) -> None:
+        if not placeholder.is_inside(self.block):  # pragma: no cover
+            raise ValueError(f'The placeholder ({placeholder!r}) is not contained by the hunk ({self.block!r})')
 
-        Block.insort(self.placeholders, placeholder, 'placeholder')
+        insort_block(self.placeholders, placeholder)
 
-    def exclude_block(self, block: Block) -> Placeholder:
-        placeholder = Placeholder(
-            id=f'[PLACEHOLDER#{block.begin}:{block.end}]',
-            block=block,
-        )
-        self.add_placeholder(placeholder)
-        return placeholder
+    def exclude_block(self, block: Block) -> None:
+        self.add_placeholder(block)
 
     def get_code(self) -> list[str]:
         lines = [
@@ -293,12 +275,12 @@ class Hunk(BaseModel):
         for placeholder in self.placeholders:
 
             # Text lines before the placeholder
-            yield from original_lines[position:placeholder.block.begin]
+            yield from original_lines[position:placeholder.begin]
 
             # Placeholder to match the indentation level of the excluded block
-            formatted_id = placeholder.format_id(doc.doctype)
+            marker = placeholder.format_marker(doc.doctype)
             indent_example = ''
-            excluded_lines = original_lines[placeholder.block.begin:placeholder.block.end]
+            excluded_lines = original_lines[placeholder.begin:placeholder.end]
             for line in excluded_lines:
                 if indent_example:
                     if line.lstrip():
@@ -306,10 +288,10 @@ class Hunk(BaseModel):
                         break
                 elif line:
                     indent_example = line
-            yield copy_indent(indent_example, formatted_id)
+            yield copy_indent(indent_example, marker)
 
             # Skip the original text lines behind the placeholder
-            position = placeholder.block.end
+            position = placeholder.end
 
         # Text lines after the last placeholder
         yield from original_lines[position:self.block.end]
@@ -328,14 +310,15 @@ class Hunk(BaseModel):
         if self.replacement is None:
             return original_lines[self.block.begin: self.block.end]
 
-        placeholder_map = {p.id: p for p in self.placeholders}
+        doctype = self.document.doctype
+        placeholder_map = {p.format_marker(doctype): p for p in self.placeholders}
 
         lines = []
         for line in self.replacement:
             for placeholder_id in placeholder_map:
                 if placeholder_id in line:
                     placeholder = placeholder_map.pop(placeholder_id)
-                    lines.extend(original_lines[placeholder.block.begin: placeholder.block.end])
+                    lines.extend(original_lines[placeholder.begin: placeholder.end])
                     break
             else:
                 lines.append(line)
@@ -473,11 +456,7 @@ class Changeset(BaseModel):
             if not join_lines(original_lines[a.end: b.begin]).strip():
                 continue
 
-            placeholder = Placeholder(
-                id=f'[PLACEHOLDER#{block.begin}:{block.end}]',
-                block=block,
-            )
-            hunk.add_placeholder(placeholder)
+            hunk.add_placeholder(block)
 
         self.hunks[:] = [hunk]
 

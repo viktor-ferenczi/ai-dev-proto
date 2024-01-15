@@ -1,7 +1,8 @@
 import unittest
+from typing import Set
 
 from aidev.common.util import join_lines
-from aidev.editing.model import Document, Block, Hunk, Changeset, Placeholder
+from aidev.editing.model import Document, Block, Hunk, Changeset
 from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO
 
 
@@ -149,17 +150,18 @@ class TestEditingModel(unittest.TestCase):
         hunk.exclude_block(Block.from_range(48, 59))
         hunk.exclude_block(Block.from_range(62, 73))
 
-        found = set()
+        found: Set[str] = set()
         code_block = hunk.get_code()
         print(join_lines(code_block))
         for line in code_block:
             for placholder in hunk.placeholders:
-                if placholder.id in line:
-                    self.assertNotIn(placholder.id, found)
-                    found.add(placholder.id)
+                marker = placholder.format_marker(doc.doctype)
+                if marker in line:
+                    self.assertNotIn(marker, found)
+                    found.add(marker)
         self.assertEqual(2, len(found))
 
-        replacement = '''\
+        replacement: str = '''\
         public bool AddToCart(Food food, int amount)
         {
             if (food.InStock == 0 || amount == 0)
@@ -172,18 +174,19 @@ class TestEditingModel(unittest.TestCase):
             var isValidAmount = true;
             if (shoppingCartItem == null)
             {
-                // PLACEHOLDER0
+                MARKER0
             }
             else
             {
-                // PLACEHOLDER1
+                MARKER1
             }
 
             _context.SaveChanges();
             return true;
         }'''.replace('\r\n', '\n')
         for i, p in enumerate(hunk.placeholders):
-            replacement = replacement.replace(f'PLACEHOLDER{i}', p.id)
+            marker = p.format_marker(doc.doctype)
+            replacement = replacement.replace(f'MARKER{i}', marker)
         hunk.replacement = replacement.split('\n')
 
         changeset = Changeset(document=doc, hunks=[])
@@ -218,8 +221,8 @@ class TestEditingModel(unittest.TestCase):
         hunk = changeset.hunks[0]
         self.assertEqual(Block.from_range(36, 79), hunk.block)
         self.assertEqual(2, len(hunk.placeholders))
-        self.assertEqual(Placeholder(id='[PLACEHOLDER#62:63]', block=Block(begin=62, end=63)), hunk.placeholders[0])
-        self.assertEqual(Placeholder(id='[PLACEHOLDER#69:70]', block=Block(begin=69, end=70)), hunk.placeholders[1])
+        self.assertEqual(Block.from_range(62, 63), hunk.placeholders[0])
+        self.assertEqual(Block.from_range(69, 70), hunk.placeholders[1])
 
         print('-' * 40)
         print('Merged')

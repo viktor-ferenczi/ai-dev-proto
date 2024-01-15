@@ -2,7 +2,7 @@ import os
 from typing import Callable
 
 from aidev.common.util import read_text_file
-from aidev.editing.model import Hunk, Document, Block, Placeholder
+from aidev.editing.model import Hunk, Document, Block
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
@@ -369,9 +369,9 @@ This code block is relevant because it contains the logic for adding items to th
 
 ADD_TO_CARD_TODO_RELEVANT_HUNK = Hunk(
     document=Document.from_text(path='ShoppingCart.cs', text=SHOPPING_CART_CS),
-    block=Block(begin=36, end=79),
+    block=Block.from_range(36, 79),
     placeholders=[
-        Placeholder(id='[PLACEHOLDER#62:63]', block=Block(begin=62, end=63)),
-        Placeholder(id='[PLACEHOLDER#69:70]', block=Block(begin=69, end=70)),
+        Block.from_range(62, 63),
+        Block.from_range(69, 70),
     ]
 )
