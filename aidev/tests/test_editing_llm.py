@@ -32,8 +32,9 @@ or a suggested refactoring, which will be referred later as task:
 {join_lines(hunk.get_code(doc))}
 
 Identify all the code lines relevant for the task and write them in their
-original order without any change to their contents. Write the code in a
-single `{doc.doctype.code_block_type}` code block.
+original order without any change to their contents. Write the RELEVANT
+LINES in a SINGLE `{doc.doctype.code_block_type}` code block. Do NOT
+write anything before or after that code block.
 
 Replace any consecutive lines of code which is NOT relevant for the task
 with a placeholder: `// ...'
@@ -51,7 +52,9 @@ Please ALWAYS honor ALL of these general rules while resolving the issue:
 - Do NOT write any new code or comments.
 - KEEP the structure of the source code meaningful, so it can still be understood without asking questions on what is behind the placeholders.
 - KEEP the using statements, consider them as relevant. 
-- KEEP the top level namespace declaration, consider it as relevant. 
+- KEEP the top level namespace declaration, consider it as relevant.
+- KEEP the original TODO comment, since it is relevant.
+- HIDE all other TODO and FIXME comments in placeholders, since they would be confusing while working on the task. 
 
 Now take a deep breath and start working!
 '''
