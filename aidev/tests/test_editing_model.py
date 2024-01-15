@@ -1,6 +1,7 @@
 import unittest
 
-from aidev.editing.model import Document, Block
+from aidev.common.util import join_lines
+from aidev.editing.model import Document, Block, Hunk, Changeset
 from aidev.tests.data import SHOPPING_CART_CS
 
 
@@ -11,36 +12,111 @@ class TestEditingModel(unittest.TestCase):
         self.maxDiff = None
         self.document = Document.from_text('ShoppingCart.cs', SHOPPING_CART_CS)
 
-    def test_edit(self):
-        doc = self.document
-        hunk = doc.edit()
+    def test_block(self):
+        empty = Block.from_range(0, 0)
+        self.assertEqual(0, empty.begin)
+        self.assertEqual(0, empty.end)
 
-        code_block = hunk.get_code_block_for_editing(doc)
-        print('\n'.join(code_block))
-        self.assertTrue(code_block[0].startswith('['))
-        self.assertTrue(code_block[0].endswith(']'))
-        self.assertTrue('ShoppingCart' in code_block[0])
+        empty = Block.from_range(5, 5)
+        self.assertEqual(5, empty.begin)
+        self.assertEqual(5, empty.end)
+
+        nine_lines = Block.from_range(0, 9)
+        self.assertEqual(0, nine_lines.begin)
+        self.assertEqual(9, nine_lines.end)
+
+        def check(begin: int, end: int):
+            self.assertRaises(ValueError, lambda: Block.from_range(begin, end))
+
+        check(-2, -1)
+        check(-1, -2)
+        check(-1, 3)
+        check(1, 0)
+
+    def test_document(self):
+        doc = self.document
+
+        self.assertEqual(SHOPPING_CART_CS, join_lines(doc.lines))
+
+        code_block = doc.get_code()
+        print(join_lines(code_block))
+
+        self.assertEqual('[SOURCE:ShoppingCart.cs]', code_block[0])
         self.assertEqual('```cs', code_block[1])
-        self.assertEqual(SHOPPING_CART_CS, '\n'.join(code_block[2:-1]))
+        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block[2:-1]))
         self.assertEqual('```', code_block[-1])
 
-        replacement = code_block[5:9]
-        edited = hunk.substitute_placeholders(doc, replacement)
-        self.assertEqual(4, len(edited))
-        for edited_line, original_line in zip(edited, doc.lines[3:7]):
-            self.assertEqual(original_line, edited_line)
+    def test_empty_changeset(self):
+        doc = self.document
+        changeset = Changeset.from_hunks(doc, [])
+        edited_doc = changeset.apply()
+        self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
+
+    def test_edit_no_change(self):
+        doc = self.document
+
+        def check(hunks: list[Hunk]):
+            changeset = Changeset.from_hunks(doc, hunks)
+            edited_doc = changeset.apply()
+            self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
+
+        check([Hunk.from_document(doc)])
+
+        check([Hunk.from_document(doc, Block.from_range(0, 50)),
+            Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
+
+        check([Hunk.from_document(doc, Block.from_range(0, 20)),
+            Hunk.from_document(doc, Block.from_range(20, 30)),
+            Hunk.from_document(doc, Block.from_range(30, doc.line_count))])
+
+        check([Hunk.from_document(doc, Block.from_range(0, 20)),
+            Hunk.from_document(doc, Block.from_range(25, 37)),
+            Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
+
+    def test_edit_invalid_hunks(self):
+        doc = self.document
+
+        def check(hunks: list[Hunk]):
+            changeset = Changeset.from_hunks(doc, hunks)
+            self.assertRaises(ValueError, changeset.apply)
+
+        check([Hunk.from_document(doc, Block.from_range(0, doc.line_count + 1))])
+
+        check([Hunk.from_document(doc, Block.from_range(0, 51)),
+               Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
+
+        check([Hunk.from_document(doc, Block.from_range(0, 20)),
+               Hunk.from_document(doc, Block.from_range(20, 30)),
+               Hunk.from_document(doc, Block.from_range(29, doc.line_count))])
+
+    def test_edit_full_document(self):
+        doc = self.document
+
+        hunk = Hunk.from_document(doc)
+
+        code_block = hunk.get_code(doc)
+        self.assertEqual(f'[HUNK:ShoppingCart.cs#0:{doc.line_count}]', code_block[0])
+        self.assertEqual('```cs', code_block[1])
+        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block[2:-1]))
+        self.assertEqual('```', code_block[-1])
+
+        hunk.replacement = doc.lines[::-1]
+        changeset = Changeset.from_hunks(doc, [hunk])
+        edited_doc = changeset.apply()
+        self.assertEqual(join_lines(hunk.replacement), join_lines(edited_doc.lines))
 
     def test_edit_block(self):
         doc = self.document
-        hunk = doc.edit_block(Block(begin=33, end=79))
 
-        code_block = hunk.get_code_block_for_editing(doc)
-        print('\n'.join(code_block))
-        self.assertEqual(2 + (79 - 33) + 1, len(code_block))
-        for doc_line, code_block_line in zip(doc.lines[33:79], code_block[2:-1]):
-            self.assertEqual(doc_line, code_block_line)
+        hunk = Hunk.from_document(doc, Block.from_range(33, 79))
 
-        replacement = '''\
+        code_block = hunk.get_code(doc)
+        self.assertEqual(f'[HUNK:ShoppingCart.cs#33:79]', code_block[0])
+        self.assertEqual('```cs', code_block[1])
+        self.assertEqual(join_lines(doc.lines[33:79]), join_lines(code_block[2:-1]))
+        self.assertEqual('```', code_block[-1])
+
+        hunk.replacement = '''\
         public bool AddToCart(Food food, int amount)
         {
             if (food.InStock == 0 || amount == 0)
@@ -48,32 +124,34 @@ class TestEditingModel(unittest.TestCase):
                 return false;
             }
             
-            // Just stripping out the whole logic, because why not? :)
+            // Just stripping out the whole logic
 
             _context.SaveChanges();
             return true;
         }
 '''.replace('\r\n', '\n').split('\n')
-        edited_doc = doc.apply_replacements({hunk.id: replacement})
-        reference = '\n'.join(
+
+        changeset = Changeset(document=doc, hunks=[hunk])
+        edited_doc = changeset.apply()
+        reference = join_lines(
             doc.lines[:33] +
-            replacement +
+            hunk.replacement +
             doc.lines[79:]
         )
-        self.assertEquals(doc.path, edited_doc.path)
-        self.assertEquals(doc.doctype, edited_doc.doctype)
-        self.assertFalse(bool(edited_doc.hunks))
-        self.assertEquals(reference, '\n'.join(edited_doc.lines))
+        self.assertEqual(doc.path, edited_doc.path)
+        self.assertEqual(doc.doctype, edited_doc.doctype)
+        self.assertEqual(reference, join_lines(edited_doc.lines))
 
     def test_placeholders(self):
         doc = self.document
-        hunk = doc.edit_block(Block(begin=36, end=79))
-        hunk.exclude_block(Block(begin=48, end=59))
-        hunk.exclude_block(Block(begin=62, end=73))
+
+        hunk = Hunk.from_document(doc, Block.from_range(36, 79))
+        hunk.exclude_block(Block.from_range(48, 59))
+        hunk.exclude_block(Block.from_range(62, 73))
 
         found = set()
-        code_block = hunk.get_code_block_for_editing(doc)
-        print('\n'.join(code_block))
+        code_block = hunk.get_code(doc)
+        print(join_lines(code_block))
         for line in code_block:
             for placholder in hunk.placeholders:
                 if placholder.id in line:
@@ -106,16 +184,17 @@ class TestEditingModel(unittest.TestCase):
         }'''.replace('\r\n', '\n')
         for i, p in enumerate(hunk.placeholders):
             replacement = replacement.replace(f'PLACEHOLDER{i}', p.id)
-        replacement = replacement.split('\n')
+        hunk.replacement = replacement.split('\n')
 
-        edited_doc = doc.apply_replacements({})
+        changeset = Changeset(document=doc, hunks=[])
+        edited_doc = changeset.apply()
         reference = list(doc.lines)
-        self.assertEquals('\n'.join(reference), '\n'.join(edited_doc.lines))
+        self.assertEqual(join_lines(reference), join_lines(edited_doc.lines))
 
-        edited_doc = doc.apply_replacements({hunk.id: replacement})
+        changeset = Changeset(document=doc, hunks=[hunk])
+        edited_doc = changeset.apply()
         reference[77] = '            return true;'
         del reference[74]
-        self.assertEquals(doc.path, edited_doc.path)
-        self.assertEquals(doc.doctype, edited_doc.doctype)
-        self.assertFalse(bool(edited_doc.hunks))
-        self.assertEquals('\n'.join(reference), '\n'.join(edited_doc.lines))
+        self.assertEqual(doc.path, edited_doc.path)
+        self.assertEqual(doc.doctype, edited_doc.doctype)
+        self.assertEqual(join_lines(reference), join_lines(edited_doc.lines))

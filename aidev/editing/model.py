@@ -67,11 +67,12 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
+from itertools import pairwise
 from typing import Any, Optional, Iterable
 
 from pydantic import BaseModel
 
-from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent
+from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines
 
 
 class DocType(SimpleEnum):
@@ -120,6 +121,12 @@ class Block(BaseModel):
     end: int
     """Zero-based index of the first line after the block (one less than line number)"""
 
+    @classmethod
+    def from_range(cls, begin: int, end: int):
+        if not (0 <= begin <= end):
+            raise ValueError(f'Invalid block range: begin={begin}, end={end}')
+        return cls(begin=begin, end=end)
+
     def is_overlapping(self, other: 'Block') -> bool:
         return self.begin < other.end and self.end > other.begin
 
@@ -142,6 +149,56 @@ class Block(BaseModel):
 
         if i + 1 < len(items) and item.is_overlapping(items[i + 1]):  # pragma: no cover
             raise ValueError(f'Overlapping {name}: {item!r}, {items[i + 1]!r}')
+
+
+class Document(BaseModel):
+    """Document to be edited by LLMs"""
+
+    path: str
+    """Relative path of the document to the working copy"""
+
+    doctype: DocType
+    """Document type"""
+
+    lines: list[str]
+    """Lines of text without trailing newline"""
+
+    @property
+    def id(self) -> str:
+        """Unique identifier within the conversation LLMs can reproduce verbatim"""
+        return f'[SOURCE:{self.path}]'
+
+    @property
+    def line_count(self) -> int:
+        return len(self.lines)
+
+    @classmethod
+    def from_file(cls, path: str) -> 'Document':
+        text = read_text_file(path)
+        return cls.from_text(path, text)
+
+    @classmethod
+    def from_text(cls, path: str, text: str) -> 'Document':
+        doctype = DocType.from_path(path)
+        lines: list[str] = text.split('\n')
+        return cls(path=path, doctype=doctype, lines=lines)
+
+    def get_code(self) -> list[str]:
+        lines = [
+            self.id,
+            f'```{self.doctype.code_block_type}'
+        ]
+        lines.extend(self.lines)
+        lines.append('```')
+        return lines
+
+    def write(self) -> None:
+        """Writes the document
+
+        Overwrites the file on disk is it exists.
+
+        """
+        write_text_file(self.path, join_lines(self.lines))
 
 
 class Placeholder(BaseModel):
@@ -171,8 +228,8 @@ class Placeholder(BaseModel):
 class Hunk(BaseModel):
     """Block of lines to be edited inside a document"""
 
-    id: str
-    """Unique identifier within the conversation LLMs can reproduce verbatim"""
+    document: Document
+    """Document the hunk is defined for"""
 
     block: Block
     """Block of lines in the document"""
@@ -180,7 +237,24 @@ class Hunk(BaseModel):
     placeholders: list[Placeholder] = []
     """Sorted placeholders, they cannot overlap"""
 
-    def add_placeholder(self, placeholder: Placeholder):
+    replacement: Optional[list[str]] = None
+    """Replacement text for the hunk, potentially including placeholders"""
+
+    @property
+    def id(self) -> str:
+        """Unique identifier within the conversation LLMs can reproduce verbatim"""
+        return f'[HUNK:{self.document.path}#{self.block.begin}:{self.block.end}]'
+
+    @classmethod
+    def from_document(cls, document: Document, block: Optional[Block] = None) -> 'Hunk':
+        if block is None:
+            block = Block.from_range(0, document.line_count)
+        return cls(document=document, block=block)
+
+    def is_overlapping(self, other: 'Hunk') -> bool:
+        return self.block.is_overlapping(other.block)
+
+    def add_placeholder(self, placeholder: Placeholder) -> None:
         if not placeholder.block.is_inside(self.block):  # pragma: no cover
             raise ValueError(f'The placeholder ({placeholder.block!r}) is not contained by the hunk ({self.block!r})')
 
@@ -194,16 +268,16 @@ class Hunk(BaseModel):
         self.add_placeholder(placeholder)
         return placeholder
 
-    def get_code_block_for_editing(self, document: 'Document') -> list[str]:
+    def get_code(self, document: Document) -> list[str]:
         lines = [
             self.id,
             f'```{document.doctype.code_block_type}'
         ]
-        lines.extend(self.iter_lines_for_editing(document))
+        lines.extend(self.__iter_code_with_placeholders(document))
         lines.append('```')
         return lines
 
-    def iter_lines_for_editing(self, document: 'Document') -> Iterable[str]:
+    def __iter_code_with_placeholders(self, document: Document) -> Iterable[str]:
         """Yields the text lines to be sent to the LLM for editing,
         placeholders are replaced with their formatted IDs as
         comments suitable for the document type
@@ -233,128 +307,91 @@ class Hunk(BaseModel):
         # Text lines after the last placeholder
         yield from document.lines[position:self.block.end]
 
-    def substitute_placeholders(self, document: 'Document', replacement: list[str]) -> list[str]:
-        """Substitutes the placeholders into the LLM provided replacement text lines
+    def apply_replacement(self) -> list[str]:
+        """Applies the replacement by substituting placeholders
 
-        Raises ValueError if any of the placeholders are missing.
+        If no replacement is provided then it returns the original
+        code lines from the hunk.
+
+        Allows removing code by excluding placeholders, therefore having
+        full test coverage is important to detect any erroneous removal.
 
         """
+        original_lines = self.document.lines
+        if self.replacement is None:
+            return original_lines[self.block.begin: self.block.end]
+
         placeholder_map = {p.id: p for p in self.placeholders}
 
         lines = []
-        for line in replacement:
+        for line in self.replacement:
             for placeholder_id in placeholder_map:
                 if placeholder_id in line:
                     placeholder = placeholder_map.pop(placeholder_id)
-                    lines.extend(document.lines[placeholder.block.begin: placeholder.block.end])
+                    lines.extend(original_lines[placeholder.block.begin: placeholder.block.end])
                     break
             else:
                 lines.append(line)
 
-        if placeholder_map:  # pragma: no cover
-            raise ValueError(f'Missing placeholders: {sorted(placeholder_map)!r}')
-
         return lines
 
 
-class Document(BaseModel):
-    """Document to be edited by LLMs"""
+class Changeset(BaseModel):
+    document: Document
+    """Original document"""
 
-    path: str
-    """Relative path of the document to the working copy"""
-
-    doctype: DocType
-    """Document type"""
-
-    lines: list[str]
-    """Lines of text without trailing newline"""
-
-    hunks: list[Hunk] = []
-    """Sorted hunks, they cannot overlap"""
-
-    @property
-    def line_count(self) -> int:
-        return len(self.lines)
-
-    def is_valid_block(self, block: Block) -> bool:
-        return 0 <= block.begin < block.end <= self.line_count
-
-    def add_hunk(self, hunk: Hunk):
-        Block.insort(self.hunks, hunk, 'hunk')
-
-    def edit(self) -> Hunk:
-        block = Block(begin=0, end=self.line_count)
-        hunk = Hunk(
-            id=f'[HUNK:{self.path}]',
-            document=self,
-            block=block,
-        )
-
-        self.add_hunk(hunk)
-        return hunk
-
-    def edit_block(self, block: Block) -> Hunk:
-        if not self.is_valid_block(block):  # pragma: no cover
-            raise ValueError(f'Invalid block for this document of {self.line_count} lines: {block!r}')
-
-        hunk = Hunk(
-            id=f'[HUNK:{self.path}#{block.begin}:{block.end}]',
-            document=self,
-            block=block,
-        )
-
-        self.add_hunk(hunk)
-        return hunk
+    hunks: list[Hunk]
+    """Hunks to apply"""
 
     @classmethod
-    def from_file(cls, path: str) -> 'Document':
-        text = read_text_file(path)
-        return cls.from_text(path, text)
+    def from_hunks(cls, document: Document, hunks: list[Hunk]):
+        return cls(document=document, hunks=hunks)
 
-    @classmethod
-    def from_text(cls, path: str, text: str) -> 'Document':
-        doctype = DocType.from_path(path)
-        lines: list[str] = text.split('\n')
-        return cls(path=path, doctype=doctype, lines=lines)
+    def apply(self) -> Document:
+        """Applies the replacements from all the hunks
 
-    def write(self):
-        write_text_file(self.path, '\n'.join(self.lines))
-
-    def apply_replacements(self, replacements: dict[str, list[str]]) -> 'Document':
-        """Applies replacements to the hunks requested
+        Sorts the hunks and ensure that they are disjunct.
 
         Returns a new Document with the edited lines and no hunks.
         The path and the doctype are copied from the original document.
 
-        Raises ValueError in case of an invalid hunk ID or a missing
-        placeholder in any of the hunks processed.
+        Raises ValueError if any of the hunks overlap.
 
         """
-        replacements = dict(**replacements)
-
-        lines = []
-        position = 0
-        for hunk in self.hunks:
-            lines.extend(self.lines[position:hunk.block.begin])
-
-            replacement: Optional[list[str]] = replacements.pop(hunk.id, None)
-            if replacement is None:
-                lines.extend(self.lines[hunk.block.begin:hunk.block.end])
-            else:
-                edited_lines = hunk.substitute_placeholders(self, replacement)
-                lines.extend(edited_lines)
-
-            position = hunk.block.end
-
-        lines.extend(self.lines[position:])
-
-        if replacements:  # pragma: no cover
-            raise ValueError(f'Unknown hunk IDs: {list(replacements)!r}')
-
-        edited_document = Document(
-            path=self.path,
-            doctype=self.doctype,
+        self.__sort_and_verify_hunks()
+        lines: list[str] = self.__apply_sorted_hunks()
+        return Document(
+            path=self.document.path,
+            doctype=self.document.doctype,
             lines=lines,
         )
 
-        return edited_document
+    def __sort_and_verify_hunks(self) -> None:
+        if not self.hunks:
+            return
+
+        self.hunks.sort(key=lambda h: h.block.begin)
+
+        if self.hunks[0].block.begin < 0:
+            raise ValueError(f'Hunk is outside of the document: {self.hunks[0].id}, line_count={self.document.line_count}')
+
+        if self.hunks[-1].block.end > self.document.line_count:
+            raise ValueError(f'Hunk is outside of the document: {self.hunks[-1].id}, line_count={self.document.line_count}')
+
+        for a, b in pairwise(self.hunks):
+            if a.is_overlapping(b):
+                raise ValueError(f'Overlapping hunks: {a.id}, {b.id}')
+
+    def __apply_sorted_hunks(self) -> list[str]:
+        original_lines = self.document.lines
+
+        lines: list[str] = []
+
+        position: int = 0
+        for hunk in self.hunks:
+            lines.extend(original_lines[position:hunk.block.begin])
+            lines.extend(hunk.apply_replacement())
+            position = hunk.block.end
+
+        lines.extend(original_lines[position:])
+        return lines
