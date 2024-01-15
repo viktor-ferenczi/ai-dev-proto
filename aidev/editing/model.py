@@ -67,12 +67,12 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
-from itertools import pairwise
-from typing import Any, Optional, Iterable
+from itertools import pairwise, islice
+from typing import Any, Optional, Iterable, Callable
 
 from pydantic import BaseModel
 
-from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines
+from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
 
 
 class DocType(SimpleEnum):
@@ -120,6 +120,10 @@ class Block(BaseModel):
 
     end: int
     """Zero-based index of the first line after the block (one less than line number)"""
+
+    @property
+    def line_count(self):
+        return self.end - self.begin
 
     @classmethod
     def from_range(cls, begin: int, end: int):
@@ -398,3 +402,99 @@ class Changeset(BaseModel):
 
         lines.extend(original_lines[position:])
         return lines
+
+    @classmethod
+    def from_completion_strict(cls, document: Document, completion: str) -> 'Changeset':
+        hunks: list[Hunk] = []
+        for code_block in extract_code_blocks(completion):
+
+            if not code_block.strip():
+                continue
+
+            code_lines: list[str] = code_block.split('\n')
+            blocks: list[Block] = list(iter_find_full_block(document.lines, code_lines))
+            if not blocks:
+                raise ValueError('Code block not found in document')
+            if len(blocks) > 1:
+                raise ValueError(f'Code block found more than once ({len(blocks)}) in document')
+
+            hunk = Hunk.from_document(document, blocks[0])
+
+            if hunks and hunk.block.begin < hunks[-1].block.end:
+                raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
+
+            hunks.append(hunk)
+
+        return cls(document=document, hunks=hunks)
+
+    @classmethod
+    def from_completion_lax(cls, document: Document, completion: str) -> 'Changeset':
+        hunks: list[Hunk] = []
+        for code_block in extract_code_blocks(completion):
+
+            if not code_block.strip():
+                continue
+
+            code_lines: list[str] = code_block.split('\n')
+            while code_lines:
+                for block in iter_find_partial_block(document.lines, code_lines):
+
+                    hunk = Hunk.from_document(document, block)
+
+                    if hunks and hunk.block.begin < hunks[-1].block.end:
+                        raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
+
+                    hunks.append(hunk)
+
+                    code_lines = code_lines[block.line_count:]
+                    break
+                else:
+                    raise ValueError('Code lines not found')
+
+        return cls(document=document, hunks=hunks)
+
+
+def iter_find_full_block(
+        doc: list[str],
+        block: list[str],
+        start: int = 0,
+        normalize: Callable[[str], str] = lambda s: s.strip()
+) -> Iterable[Block]:
+    if not doc or not block:
+        return
+
+    first_line = normalize(block[0])
+    for i, line in islice(enumerate(doc), start, None):
+
+        if normalize(line) != first_line:
+            continue
+
+        for j, block_line in enumerate(block):
+            if normalize(doc[i + j]) != normalize(block_line):
+                break
+        else:
+            yield Block.from_range(i, i + len(block))
+
+
+def iter_find_partial_block(
+        doc: list[str],
+        block: list[str],
+        start: int = 0,
+        normalize: Callable[[str], str] = lambda s: s.strip()
+) -> Iterable[Block]:
+    if not doc or not block:
+        return None
+
+    first_line = normalize(block[0])
+    for i, line in islice(enumerate(doc), start, None):
+
+        if normalize(line) != first_line:
+            continue
+
+        for j, block_line in enumerate(block):
+            if normalize(doc[i + j]) != normalize(block_line):
+                yield Block.from_range(i, i + j)
+        else:
+            yield Block.from_range(i, i + len(block))
+
+    return None

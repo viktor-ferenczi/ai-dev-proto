@@ -2,7 +2,7 @@ import unittest
 
 from aidev.common.util import join_lines
 from aidev.editing.model import Document, Block, Hunk, Changeset
-from aidev.tests.data import SHOPPING_CART_CS
+from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO
 
 
 class TestEditingModel(unittest.TestCase):
@@ -198,3 +198,17 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual(doc.path, edited_doc.path)
         self.assertEqual(doc.doctype, edited_doc.doctype)
         self.assertEqual(join_lines(reference), join_lines(edited_doc.lines))
+
+    def test_parse_completion(self):
+        doc = self.document
+        changeset = Changeset.from_completion_lax(doc, ADD_TO_CARD_TODO)
+
+        for hunk in changeset.hunks:
+            print(join_lines(hunk.get_code()))
+            print()
+
+        self.assertEqual(4, len(changeset.hunks))
+        self.assertEqual(Block.from_range(36, 62), changeset.hunks[0].block)
+        self.assertEqual(Block.from_range(63, 69), changeset.hunks[1].block)
+        self.assertEqual(Block.from_range(70, 75), changeset.hunks[2].block)
+        self.assertEqual(Block.from_range(76, 79), changeset.hunks[3].block)

@@ -315,3 +315,54 @@ namespace Shop.Data.Models
     }
 }
 '''.replace('\r\n', '\n')
+
+
+ADD_TO_CARD_TODO = r'''
+The relevant part of the code for the TASK is:
+
+```cs
+public bool AddToCart(Food food, int amount)
+{
+    if (food.InStock == 0 || amount == 0)
+    {
+        return false;
+    }
+
+    var shoppingCartItem = _context.ShoppingCartItems.SingleOrDefault(
+        s => s.Food.Id == food.Id && s.ShoppingCartId == Id);
+    var isValidAmount = true;
+    if (shoppingCartItem == null)
+    {
+        if (amount > food.InStock)
+        {
+            isValidAmount = false;
+        }
+        shoppingCartItem = new ShoppingCartItem
+        {
+            ShoppingCartId = Id,
+            Food = food,
+            Amount = Math.Min(food.InStock, amount)
+        };
+        _context.ShoppingCartItems.Add(shoppingCartItem);
+    }
+    else
+    {
+        if (food.InStock - shoppingCartItem.Amount - amount >= 0)
+        {
+            shoppingCartItem.Amount += amount;
+        }
+        else
+        {
+            shoppingCartItem.Amount += (food.InStock - shoppingCartItem.Amount);
+            isValidAmount = false;
+        }
+    }
+
+    _context.SaveChanges();
+    return isValidAmount;
+}
+```
+
+This code block is relevant because it contains the logic for adding items to the shopping cart. The task is to reduce the amount of branching in this method, which could potentially make the code easier to understand and maintain.
+
+'''
