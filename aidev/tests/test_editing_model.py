@@ -1,7 +1,7 @@
 import unittest
 
 from aidev.common.util import join_lines
-from aidev.editing.model import Document, Block, Hunk, Changeset
+from aidev.editing.model import Document, Block, Hunk, Changeset, Placeholder
 from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO
 
 
@@ -63,15 +63,15 @@ class TestEditingModel(unittest.TestCase):
         check([Hunk.from_document(doc)])
 
         check([Hunk.from_document(doc, Block.from_range(0, 50)),
-            Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
+               Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
 
         check([Hunk.from_document(doc, Block.from_range(0, 20)),
-            Hunk.from_document(doc, Block.from_range(20, 30)),
-            Hunk.from_document(doc, Block.from_range(30, doc.line_count))])
+               Hunk.from_document(doc, Block.from_range(20, 30)),
+               Hunk.from_document(doc, Block.from_range(30, doc.line_count))])
 
         check([Hunk.from_document(doc, Block.from_range(0, 20)),
-            Hunk.from_document(doc, Block.from_range(25, 37)),
-            Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
+               Hunk.from_document(doc, Block.from_range(25, 37)),
+               Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
 
     def test_edit_invalid_hunks(self):
         doc = self.document
@@ -212,3 +212,16 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual(Block.from_range(63, 69), changeset.hunks[1].block)
         self.assertEqual(Block.from_range(70, 75), changeset.hunks[2].block)
         self.assertEqual(Block.from_range(76, 79), changeset.hunks[3].block)
+
+        changeset.merge_hunks()
+        self.assertEqual(1, len(changeset.hunks))
+        hunk = changeset.hunks[0]
+        self.assertEqual(Block.from_range(36, 79), hunk.block)
+        self.assertEqual(2, len(hunk.placeholders))
+        self.assertEqual(Placeholder(id='[PLACEHOLDER#62:63]', block=Block(begin=62, end=63)), hunk.placeholders[0])
+        self.assertEqual(Placeholder(id='[PLACEHOLDER#69:70]', block=Block(begin=69, end=70)), hunk.placeholders[1])
+
+        print('-' * 40)
+        print('Merged')
+        print('-' * 40)
+        print(join_lines(hunk.get_code()))

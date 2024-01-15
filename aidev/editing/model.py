@@ -453,6 +453,34 @@ class Changeset(BaseModel):
 
         return cls(document=document, hunks=hunks)
 
+    def merge_hunks(self):
+        if len(self.hunks) <= 1:
+            return
+
+        original_lines = self.document.lines
+
+        self.__sort_and_verify_hunks()
+
+        start = min(h.block.begin for h in self.hunks)
+        end = max(h.block.end for h in self.hunks)
+
+        hunk = Hunk.from_document(self.document, Block.from_range(start, end))
+        for a, b in pairwise(h.block for h in self.hunks):
+            if a.end == b.begin:
+                continue
+
+            block = Block.from_range(a.end, b.begin)
+            if not join_lines(original_lines[a.end: b.begin]).strip():
+                continue
+
+            placeholder = Placeholder(
+                id=f'[PLACEHOLDER#{block.begin}:{block.end}]',
+                block=block,
+            )
+            hunk.add_placeholder(placeholder)
+
+        self.hunks[:] = [hunk]
+
 
 def iter_find_full_block(
         doc: list[str],
