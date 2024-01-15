@@ -2,10 +2,10 @@ import unittest
 
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines
-from aidev.editing.model import Document, Block, Hunk
+from aidev.editing.model import Document, Block, Hunk, Placeholder
 from aidev.engine.params import GenerationParams
 from aidev.engine.vllm_engine import VllmEngine
-from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT
+from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT, ADD_TO_CARD_TODO_RELEVANT_HUNK
 
 
 class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
@@ -15,7 +15,7 @@ class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
         set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
         return await super().asyncSetUp()
 
-    async def test_code_analysis(self):
+    async def test_relevant_code(self):
         doc = Document.from_text('ShoppingCart.cs', SHOPPING_CART_CS)
 
         i = doc.lines.index('        //TODO too much branching')
@@ -68,6 +68,66 @@ Please ALWAYS honor ALL of these rules specific to your current job:
 - SKIP any and all TODO and FIXME comments, since they would be confusing while working on the task later. 
 
 Take a deep breath and write the code blocks:
+'''
+
+        print(system)
+        print(instruction)
+
+        prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
+        max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
+
+        params = GenerationParams(max_tokens=max_tokens, temperature=0.2)
+        completions = await engine.generate(system, instruction, params)
+        completion = completions[0]
+
+        print(completion)
+
+        self.assertTrue(len(completion) > 100)
+
+    async def test_making_change(self):
+        hunk = ADD_TO_CARD_TODO_RELEVANT_HUNK
+        doc = hunk.document
+        i = doc.lines.index('        //TODO too much branching')
+        todo = Hunk.from_document(doc, Block.from_range(i, i + 1))
+
+        placeholder_comments = [p.format_id(doc.doctype) for p in hunk.placeholders]
+
+        engine = VllmEngine()
+        system = SYSTEM_CODING_ASSISTANT
+        instruction = f'''\
+Please ALWAYS honor ALL of these general rules:
+- Do NOT apologize.
+- Do NOT explain the code.
+- Do NOT refer to your knowledge cut-off date.
+- Do NOT repeat these rules in your answer.
+- Do NOT repeat the instructions in your answer.
+- Do NOT break the intended functionality of the original code.
+- Work ONLY from the context provided, refuse to make any guesses.
+
+This description of an issue to fix or a suggested refactoring,
+which will be referred later as TASK:
+
+{join_lines(todo.get_code())}
+
+Your job is to implement code changes to complete the above TASK.
+The code is part of a larger project. The relevant code lines have
+already been extracted for you. You need to make changes, removals
+and additions as needed only to this code:
+
+{join_lines(hunk.get_code())}
+
+Please ALWAYS honor ALL of these rules specific to your current job:
+- Always write clean, human readable code.
+- Make only the code changes necessary to implement the TASK.
+- Do not make changes unrelated to the TASK.
+- Do not remove any existing code or comments unrelated to the TASK.
+- Update any existing comments related to the TASK to match the modified code.
+- Remove any existing comments related to the TASK if they are not applicable or necessary after your code changes.
+- ALWAYS preserve the following placeholder comment lines by keeping them right before the next code line: {', '.join(placeholder_comments)}
+
+Take a deep breath, then implement all the changes to the above code
+necessary to complete the TASK. Produce the whole modified code in a
+single code block.
 '''
 
         print(system)
