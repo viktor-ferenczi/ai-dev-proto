@@ -94,7 +94,7 @@ class TestEditingModel(unittest.TestCase):
 
         hunk = Hunk.from_document(doc)
 
-        code_block = hunk.get_code(doc)
+        code_block = hunk.get_code()
         self.assertEqual(f'[HUNK:ShoppingCart.cs#0:{doc.line_count}]', code_block[0])
         self.assertEqual('```cs', code_block[1])
         self.assertEqual(SHOPPING_CART_CS, join_lines(code_block[2:-1]))
@@ -110,7 +110,7 @@ class TestEditingModel(unittest.TestCase):
 
         hunk = Hunk.from_document(doc, Block.from_range(33, 79))
 
-        code_block = hunk.get_code(doc)
+        code_block = hunk.get_code()
         self.assertEqual(f'[HUNK:ShoppingCart.cs#33:79]', code_block[0])
         self.assertEqual('```cs', code_block[1])
         self.assertEqual(join_lines(doc.lines[33:79]), join_lines(code_block[2:-1]))
@@ -150,7 +150,7 @@ class TestEditingModel(unittest.TestCase):
         hunk.exclude_block(Block.from_range(62, 73))
 
         found = set()
-        code_block = hunk.get_code(doc)
+        code_block = hunk.get_code()
         print(join_lines(code_block))
         for line in code_block:
             for placholder in hunk.placeholders:

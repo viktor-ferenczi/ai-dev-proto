@@ -268,30 +268,33 @@ class Hunk(BaseModel):
         self.add_placeholder(placeholder)
         return placeholder
 
-    def get_code(self, document: Document) -> list[str]:
+    def get_code(self) -> list[str]:
         lines = [
             self.id,
-            f'```{document.doctype.code_block_type}'
+            f'```{self.document.doctype.code_block_type}'
         ]
-        lines.extend(self.__iter_code_with_placeholders(document))
+        lines.extend(self.__iter_code_with_placeholders())
         lines.append('```')
         return lines
 
-    def __iter_code_with_placeholders(self, document: Document) -> Iterable[str]:
+    def __iter_code_with_placeholders(self) -> Iterable[str]:
         """Yields the text lines to be sent to the LLM for editing,
         placeholders are replaced with their formatted IDs as
         comments suitable for the document type
         """
+        doc = self.document
+        original_lines = doc.lines
+
         position = self.block.begin
         for placeholder in self.placeholders:
 
             # Text lines before the placeholder
-            yield from document.lines[position:placeholder.block.begin]
+            yield from original_lines[position:placeholder.block.begin]
 
             # Placeholder to match the indentation level of the excluded block
-            formatted_id = placeholder.format_id(document.doctype)
+            formatted_id = placeholder.format_id(doc.doctype)
             indent_example = ''
-            excluded_lines = document.lines[placeholder.block.begin:placeholder.block.end]
+            excluded_lines = original_lines[placeholder.block.begin:placeholder.block.end]
             for line in excluded_lines:
                 if indent_example:
                     if line.lstrip():
@@ -305,7 +308,7 @@ class Hunk(BaseModel):
             position = placeholder.block.end
 
         # Text lines after the last placeholder
-        yield from document.lines[position:self.block.end]
+        yield from original_lines[position:self.block.end]
 
     def apply_replacement(self) -> list[str]:
         """Applies the replacement by substituting placeholders
