@@ -2,7 +2,7 @@ import unittest
 
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines
-from aidev.editing.model import Document, Block, Hunk
+from aidev.editing.model import Document, Block, Hunk, MARKER_NAME
 from aidev.engine.params import GenerationParams
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT, ADD_TO_CARD_TODO_RELEVANT_HUNK
@@ -90,12 +90,9 @@ Take a deep breath and write the code blocks:
         i = doc.lines.index('        //TODO too much branching')
         todo = Hunk.from_document(doc, Block.from_range(i, i + 1))
 
-        markers = [p.format_marker(doc.doctype) for p in hunk.placeholders]
-        markers_text = ''.join(f'  * {m}\n' for m in markers)
-
         engine = VllmEngine()
         system = SYSTEM_CODING_ASSISTANT
-        instruction = f'''\
+        instruction = f'''\       
 Please ALWAYS honor ALL of these general rules:
 - Do NOT apologize.
 - Do NOT explain the code.
@@ -124,9 +121,8 @@ Please ALWAYS honor ALL of these rules specific to your current job:
 - Do not remove any existing code or comments unrelated to the TASK.
 - Update any existing comments related to the TASK to match the modified code.
 - Remove any existing comments related to the TASK if they are not applicable or necessary after your code changes.
-- NEVER use placeholders, always write out the full code.
-- ALWAYS preserve the following markers:
-{markers_text}
+- NEVER use placeholders, ALWAYS write out the full code.
+- PRESERVE code lines containing {MARKER_NAME}, even if they don't seem to relate to the logic.
 
 Take a deep breath, then implement all the changes to the above code
 necessary to complete the TASK. Produce the whole modified code in a

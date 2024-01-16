@@ -26,7 +26,7 @@ Requirements about the edited text:
 
 A hunk is a related set of code or document lines, the unit of editing. Hunks
 must not overlap. Hunks may have block of lines exluded from editing by replacing
-them with placeholders.
+them with markers.
 
 LLMs are supposed to edit text (source code, templates) by replacing entire
 hunks. No finer-grain editing is required, since hunks should already reflect
@@ -39,9 +39,9 @@ Hunks are defined by:
 - Placeholders to exclude blocks from LLM editing
 
 The LLM can edit the hunk by stating the Hunk ID and providing the replacement
-text in a code block. The LLM must reproduce all placeholders as-is in the right
+text in a code block. The LLM must reproduce all markers as-is in the right
 positions to be consistent with the original code. Failing to reproduce any
-placeholder in the replacement code is a validation error.
+marker in the replacement code is a validation error.
 
 In case of programming languages with namespaces (C#, Java, C++, ...) the Hunk ID
 may include additional information, for example: Namespace.Class.Method
@@ -52,12 +52,12 @@ meaningful for the LLM. The document normalization after editing must also valid
 the hierarchy to cache inconsistent changes breaking the document structure.
 
 If a hunk includes lines which are irrelevant for the task at hand, then those parts
-should be replaced by placeholders as long as they represent a significant saving on
+should be replaced by markers as long as they represent a significant saving on
 context size or helps to avoid confusing the LLM.
 
-The exact format of the placeholder is specific to the programming language or
+The exact format of the marker is specific to the programming language or
 document format, since it must preserve the validity of its sourrounding context.
-The LLM must reproduce those placeholders verbatim, failing to do so is a validation
+The LLM must reproduce those markers verbatim, failing to do so is a validation
 error. Placeholders must be on separate lines, but may have whitespace around them.
 Placeholders must not hide (remove) any information which is used in the remaining
 hunk visible for the LLM to avoid confusion.
@@ -68,9 +68,9 @@ but never modified in place, nor any information removed from them until being d
 """
 import bisect
 from itertools import pairwise, islice
-from typing import Any, Optional, Iterable, Callable
+from typing import Any, Optional, Iterable, Callable, Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
 
@@ -112,6 +112,8 @@ class DocType(SimpleEnum):
         }[self]
 
 
+MARKER_NAME = 'AiDev.Marker'
+
 class Block(BaseModel):
     """Represent a block of consequtive lines of text"""
 
@@ -137,14 +139,14 @@ class Block(BaseModel):
     def is_inside(self, other: 'Block') -> bool:
         return self.begin >= other.begin and self.end <= other.end
 
-    def format_marker(self, doctype: DocType, name: str = 'Marker') -> str:
+    def format_marker(self, doctype: DocType) -> str:
         formatter = {
-            DocType.UNKNOWN: (lambda: f'**{name}#{self.begin}:{self.end}**'),
-            DocType.TEXT: (lambda: f'**{name}#{self.begin}:{self.end}**'),
-            DocType.MARKDOWN: (lambda: f'**{name}#{self.begin}:{self.end}**'),
-            DocType.PYTHON: (lambda: f'AiDev.{name}("{self.begin}:{self.end}")'),
-            DocType.CSHARP: (lambda: f'AiDev.{name}("{self.begin}:{self.end}");'),
-            DocType.CSHTML: (lambda: f'<span class="{name}">{self.begin}:{self.end}</span>'),
+            DocType.UNKNOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.TEXT: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.MARKDOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.PYTHON: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}")'),
+            DocType.CSHARP: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}");'),
+            DocType.CSHTML: (lambda: f'<span class="{MARKER_NAME}">{self.begin}:{self.end}</span>'),
         }[doctype]
         return formatter()
 
@@ -225,11 +227,11 @@ class Hunk(BaseModel):
     block: Block
     """Block of lines in the document"""
 
-    placeholders: list[Block] = []
-    """Sorted placeholders, they cannot overlap"""
+    markers: list[Block] = []
+    """Sorted markers, they cannot overlap"""
 
     replacement: Optional[list[str]] = None
-    """Replacement text for the hunk, potentially including placeholders"""
+    """Replacement text for the hunk, potentially including markers"""
 
     @property
     def id(self) -> str:
@@ -245,42 +247,42 @@ class Hunk(BaseModel):
     def is_overlapping(self, other: 'Hunk') -> bool:
         return self.block.is_overlapping(other.block)
 
-    def add_placeholder(self, placeholder: Block) -> None:
-        if not placeholder.is_inside(self.block):  # pragma: no cover
-            raise ValueError(f'The placeholder ({placeholder!r}) is not contained by the hunk ({self.block!r})')
+    def add_marker(self, marker: Block) -> None:
+        if not marker.is_inside(self.block):  # pragma: no cover
+            raise ValueError(f'The marker ({marker!r}) is not contained by the hunk ({self.block!r})')
 
-        insort_block(self.placeholders, placeholder)
+        insort_block(self.markers, marker)
 
     def exclude_block(self, block: Block) -> None:
-        self.add_placeholder(block)
+        self.add_marker(block)
 
     def get_code(self) -> list[str]:
         lines = [
             self.id,
             f'```{self.document.doctype.code_block_type}'
         ]
-        lines.extend(self.__iter_code_with_placeholders())
+        lines.extend(self.__iter_code_with_markers())
         lines.append('```')
         return lines
 
-    def __iter_code_with_placeholders(self) -> Iterable[str]:
+    def __iter_code_with_markers(self) -> Iterable[str]:
         """Yields the text lines to be sent to the LLM for editing,
-        placeholders are replaced with their formatted IDs as
+        markers are replaced with their formatted IDs as
         comments suitable for the document type
         """
         doc = self.document
         original_lines = doc.lines
 
         position = self.block.begin
-        for placeholder in self.placeholders:
+        for marker in self.markers:
 
-            # Text lines before the placeholder
-            yield from original_lines[position:placeholder.begin]
+            # Text lines before the marker
+            yield from original_lines[position:marker.begin]
 
             # Placeholder to match the indentation level of the excluded block
-            marker = placeholder.format_marker(doc.doctype)
+            formatted_marker = marker.format_marker(doc.doctype)
             indent_example = ''
-            excluded_lines = original_lines[placeholder.begin:placeholder.end]
+            excluded_lines = original_lines[marker.begin:marker.end]
             for line in excluded_lines:
                 if indent_example:
                     if line.lstrip():
@@ -288,21 +290,21 @@ class Hunk(BaseModel):
                         break
                 elif line:
                     indent_example = line
-            yield copy_indent(indent_example, marker)
+            yield copy_indent(indent_example, formatted_marker)
 
-            # Skip the original text lines behind the placeholder
-            position = placeholder.end
+            # Skip the original text lines behind the marker
+            position = marker.end
 
-        # Text lines after the last placeholder
+        # Text lines after the last marker
         yield from original_lines[position:self.block.end]
 
     def apply_replacement(self) -> list[str]:
-        """Applies the replacement by substituting placeholders
+        """Applies the replacement by substituting markers
 
         If no replacement is provided then it returns the original
         code lines from the hunk.
 
-        Allows removing code by excluding placeholders, therefore having
+        Allows removing code by excluding markers, therefore having
         full test coverage is important to detect any erroneous removal.
 
         """
@@ -311,14 +313,14 @@ class Hunk(BaseModel):
             return original_lines[self.block.begin: self.block.end]
 
         doctype = self.document.doctype
-        placeholder_map = {p.format_marker(doctype): p for p in self.placeholders}
+        marker_map = {p.format_marker(doctype): p for p in self.markers}
 
         lines = []
         for line in self.replacement:
-            for placeholder_id in placeholder_map:
-                if placeholder_id in line:
-                    placeholder = placeholder_map.pop(placeholder_id)
-                    lines.extend(original_lines[placeholder.begin: placeholder.end])
+            for marker_id in marker_map:
+                if marker_id in line:
+                    marker = marker_map.pop(marker_id)
+                    lines.extend(original_lines[marker.begin: marker.end])
                     break
             else:
                 lines.append(line)
@@ -456,7 +458,7 @@ class Changeset(BaseModel):
             if not join_lines(original_lines[a.end: b.begin]).strip():
                 continue
 
-            hunk.add_placeholder(block)
+            hunk.add_marker(block)
 
         self.hunks[:] = [hunk]
 

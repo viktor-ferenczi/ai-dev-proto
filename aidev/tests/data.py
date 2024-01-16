@@ -370,7 +370,7 @@ This code block is relevant because it contains the logic for adding items to th
 ADD_TO_CARD_TODO_RELEVANT_HUNK = Hunk(
     document=Document.from_text(path='ShoppingCart.cs', text=SHOPPING_CART_CS),
     block=Block.from_range(36, 79),
-    placeholders=[
+    markers=[
         Block.from_range(62, 63),
         Block.from_range(69, 70),
     ]

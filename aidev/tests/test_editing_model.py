@@ -143,7 +143,7 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual(doc.doctype, edited_doc.doctype)
         self.assertEqual(reference, join_lines(edited_doc.lines))
 
-    def test_placeholders(self):
+    def test_markers(self):
         doc = self.document
 
         hunk = Hunk.from_document(doc, Block.from_range(36, 79))
@@ -154,7 +154,7 @@ class TestEditingModel(unittest.TestCase):
         code_block = hunk.get_code()
         print(join_lines(code_block))
         for line in code_block:
-            for placholder in hunk.placeholders:
+            for placholder in hunk.markers:
                 marker = placholder.format_marker(doc.doctype)
                 if marker in line:
                     self.assertNotIn(marker, found)
@@ -184,7 +184,7 @@ class TestEditingModel(unittest.TestCase):
             _context.SaveChanges();
             return true;
         }'''.replace('\r\n', '\n')
-        for i, p in enumerate(hunk.placeholders):
+        for i, p in enumerate(hunk.markers):
             marker = p.format_marker(doc.doctype)
             replacement = replacement.replace(f'MARKER{i}', marker)
         hunk.replacement = replacement.split('\n')
@@ -220,9 +220,9 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual(1, len(changeset.hunks))
         hunk = changeset.hunks[0]
         self.assertEqual(Block.from_range(36, 79), hunk.block)
-        self.assertEqual(2, len(hunk.placeholders))
-        self.assertEqual(Block.from_range(62, 63), hunk.placeholders[0])
-        self.assertEqual(Block.from_range(69, 70), hunk.placeholders[1])
+        self.assertEqual(2, len(hunk.markers))
+        self.assertEqual(Block.from_range(62, 63), hunk.markers[0])
+        self.assertEqual(Block.from_range(69, 70), hunk.markers[1])
 
         print('-' * 40)
         print('Merged')
