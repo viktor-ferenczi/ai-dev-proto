@@ -26,7 +26,7 @@ Requirements about the edited text:
 
 A hunk is a related set of code or document lines, the unit of editing. Hunks
 must not overlap. Hunks may have block of lines exluded from editing by replacing
-them with placeholders.
+them with markers.
 
 LLMs are supposed to edit text (source code, templates) by replacing entire
 hunks. No finer-grain editing is required, since hunks should already reflect
@@ -39,9 +39,9 @@ Hunks are defined by:
 - Placeholders to exclude blocks from LLM editing
 
 The LLM can edit the hunk by stating the Hunk ID and providing the replacement
-text in a code block. The LLM must reproduce all placeholders as-is in the right
+text in a code block. The LLM must reproduce all markers as-is in the right
 positions to be consistent with the original code. Failing to reproduce any
-placeholder in the replacement code is a validation error.
+marker in the replacement code is a validation error.
 
 In case of programming languages with namespaces (C#, Java, C++, ...) the Hunk ID
 may include additional information, for example: Namespace.Class.Method
@@ -52,12 +52,12 @@ meaningful for the LLM. The document normalization after editing must also valid
 the hierarchy to cache inconsistent changes breaking the document structure.
 
 If a hunk includes lines which are irrelevant for the task at hand, then those parts
-should be replaced by placeholders as long as they represent a significant saving on
+should be replaced by markers as long as they represent a significant saving on
 context size or helps to avoid confusing the LLM.
 
-The exact format of the placeholder is specific to the programming language or
+The exact format of the marker is specific to the programming language or
 document format, since it must preserve the validity of its sourrounding context.
-The LLM must reproduce those placeholders verbatim, failing to do so is a validation
+The LLM must reproduce those markers verbatim, failing to do so is a validation
 error. Placeholders must be on separate lines, but may have whitespace around them.
 Placeholders must not hide (remove) any information which is used in the remaining
 hunk visible for the LLM to avoid confusion.
@@ -67,12 +67,12 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
-from itertools import pairwise
-from typing import Any, Optional, Iterable
+from itertools import pairwise, islice
+from typing import Any, Optional, Iterable, Callable, Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines
+from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
 
 
 class DocType(SimpleEnum):
@@ -112,6 +112,8 @@ class DocType(SimpleEnum):
         }[self]
 
 
+MARKER_NAME = 'AiDev.Marker'
+
 class Block(BaseModel):
     """Represent a block of consequtive lines of text"""
 
@@ -120,6 +122,10 @@ class Block(BaseModel):
 
     end: int
     """Zero-based index of the first line after the block (one less than line number)"""
+
+    @property
+    def line_count(self):
+        return self.end - self.begin
 
     @classmethod
     def from_range(cls, begin: int, end: int):
@@ -133,22 +139,33 @@ class Block(BaseModel):
     def is_inside(self, other: 'Block') -> bool:
         return self.begin >= other.begin and self.end <= other.end
 
-    @staticmethod
-    def insort(items: list[Any], item: Any, name: str):
-        """Insertion sort for sorted list objects having a `block: Block` property
-        """
-        if item in items:  # pragma: no cover
-            raise ValueError(f'This {name} has already been added: {item!r}')
+    def format_marker(self, doctype: DocType) -> str:
+        formatter = {
+            DocType.UNKNOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.TEXT: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.MARKDOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
+            DocType.PYTHON: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}")'),
+            DocType.CSHARP: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}");'),
+            DocType.CSHTML: (lambda: f'<span class="{MARKER_NAME}">{self.begin}:{self.end}</span>'),
+        }[doctype]
+        return formatter()
 
-        bisect.insort(items, item, key=lambda p: p.block.begin)
 
-        i = items.index(item)
+def insort_block(blocks: list[Block], block: Block):
+    """Insertion sort for sorted list of blocks
+    """
+    if block in blocks:  # pragma: no cover
+        raise ValueError(f'This block has already been added: {block!r}')
 
-        if i > 0 and items[i - 1].is_overlapping(item):  # pragma: no cover
-            raise ValueError(f'Overlapping {name}: {item!r}, {items[i - 1]!r}')
+    bisect.insort(blocks, block, key=lambda p: p.begin)
 
-        if i + 1 < len(items) and item.is_overlapping(items[i + 1]):  # pragma: no cover
-            raise ValueError(f'Overlapping {name}: {item!r}, {items[i + 1]!r}')
+    i = blocks.index(block)
+
+    if i > 0 and blocks[i - 1].is_overlapping(block):  # pragma: no cover
+        raise ValueError(f'Overlapping block: {block!r}, {blocks[i - 1]!r}')
+
+    if i + 1 < len(blocks) and block.is_overlapping(blocks[i + 1]):  # pragma: no cover
+        raise ValueError(f'Overlapping block: {block!r}, {blocks[i + 1]!r}')
 
 
 class Document(BaseModel):
@@ -201,30 +218,6 @@ class Document(BaseModel):
         write_text_file(self.path, join_lines(self.lines))
 
 
-class Placeholder(BaseModel):
-    """Block of lines to exclude from editing in a hunk"""
-
-    id: str
-    """Unique identifier within the conversation LLMs can reproduce verbatim"""
-
-    block: Block
-    """Block relative to the document"""
-
-    def is_overlapping(self, other: 'Placeholder') -> bool:
-        return self.block.is_overlapping(other.block)
-
-    def format_id(self, doctype: DocType) -> str:
-        formatter = {
-            DocType.UNKNOWN: (lambda v: self.id),
-            DocType.TEXT: (lambda v: self.id),
-            DocType.MARKDOWN: (lambda v: f'`{self.id}`'),
-            DocType.PYTHON: (lambda v: f'# {self.id}'),
-            DocType.CSHARP: (lambda v: f'// {self.id}'),
-            DocType.CSHTML: (lambda v: f'<!-- {self.id} -->'),
-        }[doctype]
-        return formatter(id)
-
-
 class Hunk(BaseModel):
     """Block of lines to be edited inside a document"""
 
@@ -234,11 +227,11 @@ class Hunk(BaseModel):
     block: Block
     """Block of lines in the document"""
 
-    placeholders: list[Placeholder] = []
-    """Sorted placeholders, they cannot overlap"""
+    markers: list[Block] = []
+    """Sorted markers, they cannot overlap"""
 
     replacement: Optional[list[str]] = None
-    """Replacement text for the hunk, potentially including placeholders"""
+    """Replacement text for the hunk, potentially including markers"""
 
     @property
     def id(self) -> str:
@@ -254,44 +247,42 @@ class Hunk(BaseModel):
     def is_overlapping(self, other: 'Hunk') -> bool:
         return self.block.is_overlapping(other.block)
 
-    def add_placeholder(self, placeholder: Placeholder) -> None:
-        if not placeholder.block.is_inside(self.block):  # pragma: no cover
-            raise ValueError(f'The placeholder ({placeholder.block!r}) is not contained by the hunk ({self.block!r})')
+    def add_marker(self, marker: Block) -> None:
+        if not marker.is_inside(self.block):  # pragma: no cover
+            raise ValueError(f'The marker ({marker!r}) is not contained by the hunk ({self.block!r})')
 
-        Block.insort(self.placeholders, placeholder, 'placeholder')
+        insort_block(self.markers, marker)
 
-    def exclude_block(self, block: Block) -> Placeholder:
-        placeholder = Placeholder(
-            id=f'[PLACEHOLDER#{block.begin}:{block.end}]',
-            block=block,
-        )
-        self.add_placeholder(placeholder)
-        return placeholder
+    def exclude_block(self, block: Block) -> None:
+        self.add_marker(block)
 
-    def get_code(self, document: Document) -> list[str]:
+    def get_code(self) -> list[str]:
         lines = [
             self.id,
-            f'```{document.doctype.code_block_type}'
+            f'```{self.document.doctype.code_block_type}'
         ]
-        lines.extend(self.__iter_code_with_placeholders(document))
+        lines.extend(self.__iter_code_with_markers())
         lines.append('```')
         return lines
 
-    def __iter_code_with_placeholders(self, document: Document) -> Iterable[str]:
+    def __iter_code_with_markers(self) -> Iterable[str]:
         """Yields the text lines to be sent to the LLM for editing,
-        placeholders are replaced with their formatted IDs as
+        markers are replaced with their formatted IDs as
         comments suitable for the document type
         """
-        position = self.block.begin
-        for placeholder in self.placeholders:
+        doc = self.document
+        original_lines = doc.lines
 
-            # Text lines before the placeholder
-            yield from document.lines[position:placeholder.block.begin]
+        position = self.block.begin
+        for marker in self.markers:
+
+            # Text lines before the marker
+            yield from original_lines[position:marker.begin]
 
             # Placeholder to match the indentation level of the excluded block
-            formatted_id = placeholder.format_id(document.doctype)
+            formatted_marker = marker.format_marker(doc.doctype)
             indent_example = ''
-            excluded_lines = document.lines[placeholder.block.begin:placeholder.block.end]
+            excluded_lines = original_lines[marker.begin:marker.end]
             for line in excluded_lines:
                 if indent_example:
                     if line.lstrip():
@@ -299,21 +290,21 @@ class Hunk(BaseModel):
                         break
                 elif line:
                     indent_example = line
-            yield copy_indent(indent_example, formatted_id)
+            yield copy_indent(indent_example, formatted_marker)
 
-            # Skip the original text lines behind the placeholder
-            position = placeholder.block.end
+            # Skip the original text lines behind the marker
+            position = marker.end
 
-        # Text lines after the last placeholder
-        yield from document.lines[position:self.block.end]
+        # Text lines after the last marker
+        yield from original_lines[position:self.block.end]
 
     def apply_replacement(self) -> list[str]:
-        """Applies the replacement by substituting placeholders
+        """Applies the replacement by substituting markers
 
         If no replacement is provided then it returns the original
         code lines from the hunk.
 
-        Allows removing code by excluding placeholders, therefore having
+        Allows removing code by excluding markers, therefore having
         full test coverage is important to detect any erroneous removal.
 
         """
@@ -321,14 +312,15 @@ class Hunk(BaseModel):
         if self.replacement is None:
             return original_lines[self.block.begin: self.block.end]
 
-        placeholder_map = {p.id: p for p in self.placeholders}
+        doctype = self.document.doctype
+        marker_map = {p.format_marker(doctype): p for p in self.markers}
 
         lines = []
         for line in self.replacement:
-            for placeholder_id in placeholder_map:
-                if placeholder_id in line:
-                    placeholder = placeholder_map.pop(placeholder_id)
-                    lines.extend(original_lines[placeholder.block.begin: placeholder.block.end])
+            for marker_id in marker_map:
+                if marker_id in line:
+                    marker = marker_map.pop(marker_id)
+                    lines.extend(original_lines[marker.begin: marker.end])
                     break
             else:
                 lines.append(line)
@@ -395,3 +387,123 @@ class Changeset(BaseModel):
 
         lines.extend(original_lines[position:])
         return lines
+
+    @classmethod
+    def from_completion_strict(cls, document: Document, completion: str) -> 'Changeset':
+        hunks: list[Hunk] = []
+        for code_block in extract_code_blocks(completion):
+
+            if not code_block.strip():
+                continue
+
+            code_lines: list[str] = code_block.split('\n')
+            blocks: list[Block] = list(iter_find_full_block(document.lines, code_lines))
+            if not blocks:
+                raise ValueError('Code block not found in document')
+            if len(blocks) > 1:
+                raise ValueError(f'Code block found more than once ({len(blocks)}) in document')
+
+            hunk = Hunk.from_document(document, blocks[0])
+
+            if hunks and hunk.block.begin < hunks[-1].block.end:
+                raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
+
+            hunks.append(hunk)
+
+        return cls(document=document, hunks=hunks)
+
+    @classmethod
+    def from_completion_lax(cls, document: Document, completion: str) -> 'Changeset':
+        hunks: list[Hunk] = []
+        for code_block in extract_code_blocks(completion):
+
+            if not code_block.strip():
+                continue
+
+            code_lines: list[str] = code_block.split('\n')
+            while code_lines:
+                for block in iter_find_partial_block(document.lines, code_lines):
+
+                    hunk = Hunk.from_document(document, block)
+
+                    if hunks and hunk.block.begin < hunks[-1].block.end:
+                        raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
+
+                    hunks.append(hunk)
+
+                    code_lines = code_lines[block.line_count:]
+                    break
+                else:
+                    raise ValueError('Code lines not found')
+
+        return cls(document=document, hunks=hunks)
+
+    def merge_hunks(self):
+        if len(self.hunks) <= 1:
+            return
+
+        original_lines = self.document.lines
+
+        self.__sort_and_verify_hunks()
+
+        start = min(h.block.begin for h in self.hunks)
+        end = max(h.block.end for h in self.hunks)
+
+        hunk = Hunk.from_document(self.document, Block.from_range(start, end))
+        for a, b in pairwise(h.block for h in self.hunks):
+            if a.end == b.begin:
+                continue
+
+            block = Block.from_range(a.end, b.begin)
+            if not join_lines(original_lines[a.end: b.begin]).strip():
+                continue
+
+            hunk.add_marker(block)
+
+        self.hunks[:] = [hunk]
+
+
+def iter_find_full_block(
+        doc: list[str],
+        block: list[str],
+        start: int = 0,
+        normalize: Callable[[str], str] = lambda s: s.strip()
+) -> Iterable[Block]:
+    if not doc or not block:
+        return
+
+    first_line = normalize(block[0])
+    for i, line in islice(enumerate(doc), start, None):
+
+        if normalize(line) != first_line:
+            continue
+
+        for j, block_line in enumerate(block):
+            if normalize(doc[i + j]) != normalize(block_line):
+                break
+        else:
+            yield Block.from_range(i, i + len(block))
+
+
+def iter_find_partial_block(
+        doc: list[str],
+        block: list[str],
+        start: int = 0,
+        normalize: Callable[[str], str] = lambda s: s.strip()
+) -> Iterable[Block]:
+    if not doc or not block:
+        return None
+
+    first_line = normalize(block[0])
+    for i, line in islice(enumerate(doc), start, None):
+
+        if normalize(line) != first_line:
+            continue
+
+        for j, block_line in enumerate(block):
+            if normalize(doc[i + j]) != normalize(block_line):
+                yield Block.from_range(i, i + j)
+        else:
+            yield Block.from_range(i, i + len(block))
+
+    return None

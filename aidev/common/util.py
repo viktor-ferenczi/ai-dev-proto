@@ -3,7 +3,7 @@ import difflib
 import os
 import re
 from enum import Enum
-from typing import Iterable, TypeVar, Tuple
+from typing import Iterable
 
 from jinja2 import Template, Environment
 
@@ -142,3 +142,11 @@ def get_prompt_template_for_model(model: str) -> Template:
     environment = Environment()
     prompt_template = environment.from_string(source)
     return prompt_template
+
+
+def extract_code_blocks(completion: str) -> list[str]:
+    parts = completion.split('\n```')
+    return [
+        parts[i].split('\n', 1)[1]
+        for i in range(1, len(parts), 2)
+    ]
