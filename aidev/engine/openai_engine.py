@@ -1,3 +1,4 @@
+from logging import Logger
 from typing import List, Optional
 
 from openai import AsyncOpenAI
@@ -12,8 +13,8 @@ from ..tokenizer.tokenizer import get_tokenizer
 # API: https://github.com/openai/openai-python
 class OpenAIEngine(Engine):
 
-    def __init__(self, model: str = '', base_url: str = '', api_key: str = '') -> None:
-        super().__init__(model)
+    def __init__(self, model: str = '', base_url: str = '', api_key: str = '', *, logger: Optional[Logger] = None) -> None:
+        super().__init__(model, logger)
 
         self.base_url = base_url or C.OPENAI_BASE_URL
         self.api_key = api_key or C.OPENAI_KEY

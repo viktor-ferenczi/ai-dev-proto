@@ -67,10 +67,10 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
-from itertools import pairwise, islice
-from typing import Any, Optional, Iterable, Callable, Annotated
+from itertools import pairwise
+from typing import Optional, Iterable, Callable, Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
 
@@ -113,6 +113,7 @@ class DocType(SimpleEnum):
 
 
 MARKER_NAME = 'AiDev.Marker'
+
 
 class Block(BaseModel):
     """Represent a block of consequtive lines of text"""
@@ -389,7 +390,11 @@ class Changeset(BaseModel):
         return lines
 
     @classmethod
-    def from_completion_strict(cls, document: Document, completion: str) -> 'Changeset':
+    def from_completion(cls,
+                        document: Document,
+                        completion: str,
+                        normalize: Callable[[str], str] = lambda s: s.rstrip()
+                        ) -> 'Changeset':
         hunks: list[Hunk] = []
         for code_block in extract_code_blocks(completion):
 
@@ -397,44 +402,16 @@ class Changeset(BaseModel):
                 continue
 
             code_lines: list[str] = code_block.split('\n')
-            blocks: list[Block] = list(iter_find_full_block(document.lines, code_lines))
-            if not blocks:
-                raise ValueError('Code block not found in document')
-            if len(blocks) > 1:
-                raise ValueError(f'Code block found more than once ({len(blocks)}) in document')
 
-            hunk = Hunk.from_document(document, blocks[0])
-
-            if hunks and hunk.block.begin < hunks[-1].block.end:
-                raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
-
-            hunks.append(hunk)
-
-        return cls(document=document, hunks=hunks)
-
-    @classmethod
-    def from_completion_lax(cls, document: Document, completion: str) -> 'Changeset':
-        hunks: list[Hunk] = []
-        for code_block in extract_code_blocks(completion):
-
-            if not code_block.strip():
-                continue
-
-            code_lines: list[str] = code_block.split('\n')
-            while code_lines:
-                for block in iter_find_partial_block(document.lines, code_lines):
-
+            start = 0
+            while start < len(code_lines):
+                for block in iter_find_partial_blocks(document.lines, 0, code_lines, start):
                     hunk = Hunk.from_document(document, block)
-
-                    if hunks and hunk.block.begin < hunks[-1].block.end:
-                        raise ValueError(f'Hunks in reverse order: {hunks[-1].id}, {hunk.id}')
-
                     hunks.append(hunk)
-
-                    code_lines = code_lines[block.line_count:]
+                    start += block.line_count
                     break
                 else:
-                    raise ValueError('Code lines not found')
+                    raise ValueError(f'Code lines not found {start}:{len(code_lines)}')
 
         return cls(document=document, hunks=hunks)
 
@@ -463,47 +440,34 @@ class Changeset(BaseModel):
         self.hunks[:] = [hunk]
 
 
-def iter_find_full_block(
+def iter_find_partial_blocks(
         doc: list[str],
+        doc_start: int,
         block: list[str],
-        start: int = 0,
-        normalize: Callable[[str], str] = lambda s: s.strip()
+        block_start: int,
 ) -> Iterable[Block]:
-    if not doc or not block:
+    assert doc_start >= 0
+    assert block_start >= 0
+
+    doc_len = len(doc)
+    block_len = len(block)
+
+    if doc_start >= doc_len or block_start >= block_len:
         return
 
-    first_line = normalize(block[0])
-    for i, line in islice(enumerate(doc), start, None):
+    j = block_start
+    for i in range(doc_start, doc_len):
 
-        if normalize(line) != first_line:
+        doc_line = doc[i]
+        if doc_line != block[j]:
             continue
 
-        for j, block_line in enumerate(block):
-            if normalize(doc[i + j]) != normalize(block_line):
+        remaining = min(doc_len - i, block_len - j)
+        for k in range(remaining):
+            if doc[i + k] != block[j + k]:
+                yield Block.from_range(i, i + k)
+                j += k
                 break
         else:
-            yield Block.from_range(i, i + len(block))
-
-
-def iter_find_partial_block(
-        doc: list[str],
-        block: list[str],
-        start: int = 0,
-        normalize: Callable[[str], str] = lambda s: s.strip()
-) -> Iterable[Block]:
-    if not doc or not block:
-        return None
-
-    first_line = normalize(block[0])
-    for i, line in islice(enumerate(doc), start, None):
-
-        if normalize(line) != first_line:
-            continue
-
-        for j, block_line in enumerate(block):
-            if normalize(doc[i + j]) != normalize(block_line):
-                yield Block.from_range(i, i + j)
-        else:
-            yield Block.from_range(i, i + len(block))
-
-    return None
+            yield Block.from_range(i, i + remaining)
+            break

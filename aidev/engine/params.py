@@ -6,9 +6,10 @@ from pydantic import BaseModel
 
 class GenerationParams(BaseModel):
     n: int = 1
-    max_tokens: int = 256
-    temperature: float = 1.0
     use_beam_search: bool = False
+    max_tokens: int = 256
+    # Keep the default temperature at zero, that's required when beam search is turned on
+    temperature: float = 0.0
 
 
 class ConstraintType(str, Enum):
