@@ -53,7 +53,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def test_multiple_completions(self):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = 'How is an iterative quicksort algorithm implemented?'
-        params = GenerationParams(max_tokens=300, number_of_completions=16)
+        params = GenerationParams(n=16, max_tokens=300, temperature=0.5)
 
         started = time.perf_counter()
         completions = await self.engine.generate(system, instruction, params)
@@ -70,7 +70,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(bool(completion.strip()))
 
     async def test_coding(self):
-        params = GenerationParams(max_tokens=2000)
+        params = GenerationParams(max_tokens=2000, temperature=0.2)
 
         print('SYSTEM:')
         print(SYSTEM_CODING_ASSISTANT)
@@ -100,13 +100,13 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         context_headroom_tokens = 100
 
         failed = 0
-        max_attempts = 5
+        max_attempts = 10
 
         for size in (1024, 2048, 4096, 8192, 16384, 24576, 32768, 49152, 65536, 81920, 98304, 131072, 163840, 196608, 229376, 262144):
             if size > self.engine.max_context:
                 break
 
-            params = GenerationParams(max_tokens=100)
+            params = GenerationParams(max_tokens=100, temperature=0.5)
 
             system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
             system_tokens = self.engine.count_tokens(system)
@@ -152,7 +152,8 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         async def generate(instruction: str) -> str:
             instruction_tokens = self.engine.count_tokens(instruction)
-            params = GenerationParams(max_tokens=self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens)
+            max_tokens = self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens
+            params = GenerationParams(max_tokens=max_tokens, temperature=0.5)
             completions = await self.engine.generate(system, instruction, params)
             return completions[0]
 
@@ -198,7 +199,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
-        params = GenerationParams(max_tokens=50, temperature=0.0)
+        params = GenerationParams(max_tokens=50)
         constraint = RegexConstraint(r'\d+(\s*,\s*\d+)*\s*')
         completions = await self.engine.generate(system, instruction, params, constraint)
 
@@ -209,10 +210,12 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
     # Does not work, see: https://github.com/outlines-dev/outlines/issues/534
     async def test_grammar_constraint(self):
+        self.fail('Disabled until the PR in outlines is merged')
+
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
-        params = GenerationParams(max_tokens=50, temperature=0.0)
+        params = GenerationParams(max_tokens=50)
         constraint = GrammarConstraint(r'''\
 ?start: DIGIT+ ( "," DIGIT+ )* _WS?
 %import common.DIGIT

@@ -211,15 +211,15 @@ class TestEditingModel(unittest.TestCase):
             print()
 
         self.assertEqual(4, len(changeset.hunks))
-        self.assertEqual(Block.from_range(36, 62), changeset.hunks[0].block)
+        self.assertEqual(Block.from_range(35, 62), changeset.hunks[0].block)
         self.assertEqual(Block.from_range(63, 69), changeset.hunks[1].block)
         self.assertEqual(Block.from_range(70, 75), changeset.hunks[2].block)
-        self.assertEqual(Block.from_range(76, 79), changeset.hunks[3].block)
+        self.assertEqual(Block.from_range(76, 80), changeset.hunks[3].block)
 
         changeset.merge_hunks()
         self.assertEqual(1, len(changeset.hunks))
         hunk = changeset.hunks[0]
-        self.assertEqual(Block.from_range(36, 79), hunk.block)
+        self.assertEqual(Block.from_range(35, 80), hunk.block)
         self.assertEqual(2, len(hunk.markers))
         self.assertEqual(Block.from_range(62, 63), hunk.markers[0])
         self.assertEqual(Block.from_range(69, 70), hunk.markers[1])

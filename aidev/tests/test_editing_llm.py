@@ -1,9 +1,10 @@
 import unittest
+from re import escape
 
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines
 from aidev.editing.model import Document, Block, Hunk, MARKER_NAME
-from aidev.engine.params import GenerationParams
+from aidev.engine.params import GenerationParams, RegexConstraint
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT, ADD_TO_CARD_TODO_RELEVANT_HUNK
 
@@ -65,7 +66,9 @@ Please ALWAYS honor ALL of these rules specific to your current job:
 - Do NOT implement the TASK, only prepare the code required to do so.
 - Do NOT change any of the code lines you keep.
 - PRESERVE enough of the code's structure, so it can still be understood without asking questions.
-- SKIP any and all TODO and FIXME comments, since they would be confusing while working on the task later. 
+- SKIP any and all TODO and FIXME comments, since they would be confusing while working on the task later.
+- PRESERVE ONLY the code blocks (methods, functions, classes, structs, enums, namespaces) which are relevant for the TASK. 
+- PRESERVE ONLY the code lines relevant for the TASK.  
 
 Take a deep breath and write the code blocks:
 '''
@@ -76,13 +79,17 @@ Take a deep breath and write the code blocks:
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        params = GenerationParams(max_tokens=max_tokens, temperature=0.2)
-        completions = await engine.generate(system, instruction, params)
-        completion = completions[0]
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens)
 
-        print(completion)
+        pattern = ''.join(f'({escape(line)}\n)?' for line in doc.lines)
+        pattern = f'```{doc.doctype.code_block_type}\n{pattern}\n```\n'
+        constraint = RegexConstraint(pattern)
 
-        self.assertTrue(len(completion) > 100)
+        completions = await engine.generate(system, instruction, params, constraint)
+
+        shortest = min(completions, key=len)
+        print(shortest)
+        self.assertTrue(len(shortest) > 100)
 
     async def test_making_change(self):
         hunk = ADD_TO_CARD_TODO_RELEVANT_HUNK
@@ -92,7 +99,7 @@ Take a deep breath and write the code blocks:
 
         engine = VllmEngine()
         system = SYSTEM_CODING_ASSISTANT
-        instruction = f'''\       
+        instruction = f'''\
 Please ALWAYS honor ALL of these general rules:
 - Do NOT apologize.
 - Do NOT explain the code.
@@ -135,10 +142,13 @@ single code block.
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        params = GenerationParams(max_tokens=max_tokens, temperature=0.2)
-        completions = await engine.generate(system, instruction, params)
-        completion = completions[0]
+        params = GenerationParams(n=16, use_beam_search=True, max_tokens=max_tokens)
 
-        print(completion)
+        pattern = f'```{doc.doctype.code_block_type}\n(.*?\n)+```\n'
+        constraint = RegexConstraint(pattern)
 
-        self.assertTrue(len(completion) > 100)
+        completions = await engine.generate(system, instruction, params, constraint)
+
+        for completion in completions:
+            print(completion)
+            self.assertTrue(len(completion) > 100)
