@@ -196,7 +196,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_regex_constraint(self):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-        instruction = f"Write down the first 10 prime numbers as a comma separated list."
+        instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
         params = GenerationParams(max_tokens=50, temperature=0.0)
         constraint = RegexConstraint(r'\d+(\s*,\s*\d+)*\s*')
@@ -210,7 +210,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
     # Does not work, see: https://github.com/outlines-dev/outlines/issues/534
     async def test_grammar_constraint(self):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
-        instruction = f"Write down the first 10 prime numbers as a comma separated list."
+        instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
         params = GenerationParams(max_tokens=50, temperature=0.0)
         constraint = GrammarConstraint(r'''\
