@@ -58,14 +58,18 @@ class VllmEngine(Engine):
 
         return completions
 
+    grammar_modes = {
+        ConstraintType.JSON_SCHEMA: 'json_schema',
+        ConstraintType.REGEX: 'regex',
+        ConstraintType.GRAMMAR: 'cfg',
+    }
+
     async def format_extra(self, constraint: GenerationConstraint) -> Optional[Dict[str, Any]]:
         if constraint is None:
             return None
 
-        name = {
-            ConstraintType.JSON_SCHEMA: 'schema',
-            ConstraintType.REGEX: 'regex',
-            ConstraintType.GRAMMAR: 'cfg',
-        }[constraint.type]
-
-        return {name: constraint.value}
+        grammar_mode = self.grammar_modes[constraint.type]
+        return {
+            'grammar_mode': grammar_mode,
+            'grammar': constraint.value
+        }
