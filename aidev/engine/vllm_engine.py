@@ -1,3 +1,4 @@
+from logging import Logger
 from typing import List, Optional, Dict, Any
 
 from vllm_client import AsyncVllmClient, SamplingParams
@@ -10,8 +11,8 @@ from ..common.util import get_prompt_template_for_model
 
 class VllmEngine(Engine):
 
-    def __init__(self, model: str = '', base_url: str = '') -> None:
-        super().__init__(model)
+    def __init__(self, model: str = '', base_url: str = '', *, logger: Optional[Logger] = None) -> None:
+        super().__init__(model, logger)
 
         self.base_url = base_url or C.VLLM_BASE_URL
 
@@ -19,7 +20,8 @@ class VllmEngine(Engine):
         self.optimal_parallel_sequences = C.OPTIMAL_PARALLEL_SEQUENCES[self.model]
 
         self.prompt_template = get_prompt_template_for_model(self.model)
-        self.client = AsyncVllmClient(self.base_url)
+
+        self.client = AsyncVllmClient(self.base_url, logger=logger)
 
     def count_tokens(self, text: str) -> int:
         return self.tokenizer.count_tokens(text)
