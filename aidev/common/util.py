@@ -146,7 +146,7 @@ def get_prompt_template_for_model(model: str) -> Template:
 
 
 def extract_code_blocks(completion: str) -> list[str]:
-    parts = completion.split('\n```')
+    parts = ('\n' + completion).split('\n```')
     return [
         parts[i].split('\n', 1)[1]
         for i in range(1, len(parts), 2)

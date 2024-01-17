@@ -204,7 +204,7 @@ class TestEditingModel(unittest.TestCase):
 
     def test_parse_completion(self):
         doc = self.document
-        changeset = Changeset.from_completion_lax(doc, ADD_TO_CARD_TODO)
+        changeset = Changeset.from_completion(doc, ADD_TO_CARD_TODO)
 
         for hunk in changeset.hunks:
             print(join_lines(hunk.get_code()))
