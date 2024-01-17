@@ -58,7 +58,7 @@ class VllmEngine(Engine):
 
         return completions
 
-    grammar_modes = {
+    constraint_modes = {
         ConstraintType.JSON_SCHEMA: 'json_schema',
         ConstraintType.REGEX: 'regex',
         ConstraintType.GRAMMAR: 'cfg',
@@ -68,8 +68,8 @@ class VllmEngine(Engine):
         if constraint is None:
             return None
 
-        grammar_mode = self.grammar_modes[constraint.type]
+        constraint_mode = self.constraint_modes[constraint.type]
         return {
-            'grammar_mode': grammar_mode,
-            'grammar': constraint.value
+            'constraint_mode': constraint_mode,
+            'constraint': constraint.value
         }
