@@ -1,3 +1,15 @@
+import logging
+
+# Essential to import transformers here, don't remove!
+import transformers
+
+# Unused, just to use the transformers library, so the import is not removed
+TRANSFORMERS_VERSION = transformers.__version__
+
+# Disable the excessive warning logs
+logging.getLogger('transformers').setLevel(logging.ERROR)
+
+
 class Tokenizer:
 
     def count_tokens(self, text: str) -> int:

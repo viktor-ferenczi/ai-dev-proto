@@ -184,3 +184,8 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
             print('-' * 60)
         finally:
             await client.close()
+
+
+if C.ENGINE != 'openai':
+    del SyncOpenAITest
+    del AsyncOpenAITest

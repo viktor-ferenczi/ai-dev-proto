@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel
 
-from aidev.editing.model import Changeset, Document, Hunk
+from aidev.editing.model import Patch, Document, Hunk
 from aidev.engine.params import GenerationParams
 
 
@@ -83,11 +83,11 @@ class Source(BaseModel):
     implementation_generation: Optional[Generation]
     """Request to actually implement the change. Can be None if not applicable."""
 
-    changeset: Optional[Changeset]
+    patch: Optional[Patch]
     """Hunks from the LLM generated implementation completion. Can be None if not applicable."""
 
     modified_document: Optional[Document]
-    """Source file contents with the changeset applied. Can be None if not applicable."""
+    """Source file contents with the patch applied. Can be None if not applicable."""
 
     error: Optional[str]
     """Error message in FAILED state. Can be None if the state is not FAILED."""
