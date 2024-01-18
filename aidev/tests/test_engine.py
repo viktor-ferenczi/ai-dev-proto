@@ -2,22 +2,26 @@ import json
 import time
 
 import unittest
+from logging import DEBUG, INFO
 
 from pydantic import BaseModel
 
 from aidev.common.async_helpers import map_async, iter_async
 from aidev.common.config import C
-from aidev.common.util import set_slow_callback_duration_threshold
+from aidev.common.util import set_slow_callback_duration_threshold, init_logger
 from aidev.engine.engine import Engine
 from aidev.engine.params import GenerationParams, JsonSchemaConstraint, RegexConstraint, GrammarConstraint
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
+LOG_REQUESTS = False
+
 
 class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
-        self.engine: Engine = VllmEngine()  # OpenAIEngine()
+        logger = init_logger(DEBUG if LOG_REQUESTS else INFO)
+        self.engine: Engine = VllmEngine(logger=logger)  # OpenAIEngine()
         return await super().asyncSetUp()
 
     async def asyncTearDown(self):
