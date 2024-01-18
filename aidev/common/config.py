@@ -16,6 +16,9 @@ class Config:
     # It is used to select the right tokenizer, chat template, max context size and optimal parallel sequence count
     MODEL: str = os.getenv('AIDEV_MODEL', 'deepseek-coder')
 
+    # Engine selection: 'openai' or 'vllm'
+    ENGINE: str = 'vllm'
+
     # OpenAI API compatible LLM engine
     OPENAI_BASE_URL: str = os.getenv('AIDEV_OPENAI_BASE_URL', 'http://127.0.0.1:8000/v1')
     OPENAI_KEY: str = os.getenv('AIDEV_OPENAI_KEY', 'NO-KEY')
