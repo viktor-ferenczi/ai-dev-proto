@@ -64,7 +64,7 @@ class TaskState(Enum):
     FAILED = "FAILED"
 
 
-class Task:
+class Task(BaseModel):
     id: UUID = uuid1() # monotonically increasing, good for indexing
     parent: Optional[str]
     retried: Optional[str]
