@@ -2,7 +2,7 @@ import unittest
 from typing import Set
 
 from aidev.common.util import join_lines
-from aidev.editing.model import Document, Block, Hunk, Changeset
+from aidev.editing.model import Document, Block, Hunk, Patch
 from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO
 
 
@@ -49,16 +49,16 @@ class TestEditingModel(unittest.TestCase):
 
     def test_empty_changeset(self):
         doc = self.document
-        changeset = Changeset.from_hunks(doc, [])
-        edited_doc = changeset.apply()
+        patch = Patch.from_hunks(doc, [])
+        edited_doc = patch.apply()
         self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
 
     def test_edit_no_change(self):
         doc = self.document
 
         def check(hunks: list[Hunk]):
-            changeset = Changeset.from_hunks(doc, hunks)
-            edited_doc = changeset.apply()
+            patch = Patch.from_hunks(doc, hunks)
+            edited_doc = patch.apply()
             self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
 
         check([Hunk.from_document(doc)])
@@ -78,8 +78,8 @@ class TestEditingModel(unittest.TestCase):
         doc = self.document
 
         def check(hunks: list[Hunk]):
-            changeset = Changeset.from_hunks(doc, hunks)
-            self.assertRaises(ValueError, changeset.apply)
+            patch = Patch.from_hunks(doc, hunks)
+            self.assertRaises(ValueError, patch.apply)
 
         check([Hunk.from_document(doc, Block.from_range(0, doc.line_count + 1))])
 
@@ -102,8 +102,8 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual('```', code_block[-1])
 
         hunk.replacement = doc.lines[::-1]
-        changeset = Changeset.from_hunks(doc, [hunk])
-        edited_doc = changeset.apply()
+        patch = Patch.from_hunks(doc, [hunk])
+        edited_doc = patch.apply()
         self.assertEqual(join_lines(hunk.replacement), join_lines(edited_doc.lines))
 
     def test_edit_block(self):
@@ -132,8 +132,8 @@ class TestEditingModel(unittest.TestCase):
         }
 '''.replace('\r\n', '\n').split('\n')
 
-        changeset = Changeset(document=doc, hunks=[hunk])
-        edited_doc = changeset.apply()
+        patch = Patch(document=doc, hunks=[hunk])
+        edited_doc = patch.apply()
         reference = join_lines(
             doc.lines[:33] +
             hunk.replacement +
@@ -189,13 +189,13 @@ class TestEditingModel(unittest.TestCase):
             replacement = replacement.replace(f'MARKER{i}', marker)
         hunk.replacement = replacement.split('\n')
 
-        changeset = Changeset(document=doc, hunks=[])
-        edited_doc = changeset.apply()
+        patch = Patch(document=doc, hunks=[])
+        edited_doc = patch.apply()
         reference = list(doc.lines)
         self.assertEqual(join_lines(reference), join_lines(edited_doc.lines))
 
-        changeset = Changeset(document=doc, hunks=[hunk])
-        edited_doc = changeset.apply()
+        patch = Patch(document=doc, hunks=[hunk])
+        edited_doc = patch.apply()
         reference[77] = '            return true;'
         del reference[74]
         self.assertEqual(doc.path, edited_doc.path)
@@ -204,21 +204,21 @@ class TestEditingModel(unittest.TestCase):
 
     def test_parse_completion(self):
         doc = self.document
-        changeset = Changeset.from_completion(doc, ADD_TO_CARD_TODO)
+        patch = Patch.from_completion(doc, ADD_TO_CARD_TODO)
 
-        for hunk in changeset.hunks:
+        for hunk in patch.hunks:
             print(join_lines(hunk.get_code()))
             print()
 
-        self.assertEqual(4, len(changeset.hunks))
-        self.assertEqual(Block.from_range(35, 62), changeset.hunks[0].block)
-        self.assertEqual(Block.from_range(63, 69), changeset.hunks[1].block)
-        self.assertEqual(Block.from_range(70, 75), changeset.hunks[2].block)
-        self.assertEqual(Block.from_range(76, 80), changeset.hunks[3].block)
+        self.assertEqual(4, len(patch.hunks))
+        self.assertEqual(Block.from_range(35, 62), patch.hunks[0].block)
+        self.assertEqual(Block.from_range(63, 69), patch.hunks[1].block)
+        self.assertEqual(Block.from_range(70, 75), patch.hunks[2].block)
+        self.assertEqual(Block.from_range(76, 80), patch.hunks[3].block)
 
-        changeset.merge_hunks()
-        self.assertEqual(1, len(changeset.hunks))
-        hunk = changeset.hunks[0]
+        patch.merge_hunks()
+        self.assertEqual(1, len(patch.hunks))
+        hunk = patch.hunks[0]
         self.assertEqual(Block.from_range(35, 80), hunk.block)
         self.assertEqual(2, len(hunk.markers))
         self.assertEqual(Block.from_range(62, 63), hunk.markers[0])

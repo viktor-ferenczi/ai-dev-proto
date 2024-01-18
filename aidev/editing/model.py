@@ -68,7 +68,7 @@ but never modified in place, nor any information removed from them until being d
 """
 import bisect
 from itertools import pairwise
-from typing import Optional, Iterable, Callable, Annotated
+from typing import Optional, Iterable, Callable
 
 from pydantic import BaseModel
 
@@ -116,7 +116,8 @@ MARKER_NAME = 'AiDev.Marker'
 
 
 class Block(BaseModel):
-    """Represent a block of consequtive lines of text"""
+    """Represent a block of consequtive lines of text in a document
+    """
 
     begin: int
     """Zero-based index of the first line of the block (one less than line number)"""
@@ -170,7 +171,8 @@ def insort_block(blocks: list[Block], block: Block):
 
 
 class Document(BaseModel):
-    """Document to be edited by LLMs"""
+    """Document (source code)
+    """
 
     path: str
     """Relative path of the document to the working copy"""
@@ -329,7 +331,10 @@ class Hunk(BaseModel):
         return lines
 
 
-class Changeset(BaseModel):
+class Patch(BaseModel):
+    """Modifications to hunks in a document
+    """
+
     document: Document
     """Original document"""
 
@@ -394,7 +399,7 @@ class Changeset(BaseModel):
                         document: Document,
                         completion: str,
                         normalize: Callable[[str], str] = lambda s: s.rstrip()
-                        ) -> 'Changeset':
+                        ) -> 'Patch':
         hunks: list[Hunk] = []
         for code_block in extract_code_blocks(completion):
 
