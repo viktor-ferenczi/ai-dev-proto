@@ -192,4 +192,4 @@ class Solution(BaseModel):
 
     @property
     def may_need_generation(self):
-        return any(task.may_need_generation for task in self.tasks)
+        return any(task.may_need_generation for task in self.tasks.values())
