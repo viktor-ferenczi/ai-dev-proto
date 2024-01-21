@@ -6,7 +6,7 @@ from enum import Enum
 from logging import Logger, INFO, getLogger, StreamHandler, Formatter
 from typing import Iterable
 
-from jinja2 import Template, Environment
+from jinja2 import Environment, FileSystemLoader, Template
 
 from .config import C
 
@@ -165,3 +165,21 @@ def init_logger(loglevel=INFO) -> Logger:
 
     logger.addHandler(handler)
     return logger
+
+
+def render_template(_path: str, **kws) -> str:
+    if not os.path.exists(_path):
+        raise FileNotFoundError(f"The file {_path} does not exist.")
+
+    env = Environment(loader=FileSystemLoader(os.path.dirname(_path)))
+    template = env.get_template(os.path.basename(_path))
+    return template.render(**kws)
+
+
+def render_workflow_template(_name: str, **kws) -> str:
+    path = os.path.join(C.WORKFLOW_TEMPLATES_DIR, f'{_name}.jinja')
+    return render_template(path, **kws)
+
+
+def regex_from_lines(lines: list[str]) -> str:
+    return ''.join(f'({re.escape(path)}\n)?' for path in lines)

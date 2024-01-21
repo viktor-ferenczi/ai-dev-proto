@@ -34,6 +34,9 @@ class Config:
     # Coding
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
+    # Task orchestration
+    MAX_WIP_TASKS: int = 16
+
     # Markdown code block type by file extension
     DOCTYPE_BY_EXTENSION: Dict[str, str] = {
         'cs': 'cs',
@@ -73,7 +76,9 @@ class Config:
     }
 
     # Directory with the Jinja2 prompt templates
-    PROMPT_TEMPLATES_DIR = os.path.join(AIDEV_PACKAGE_DIR, 'templates')
+    TEMPLATES_DIR = os.path.join(AIDEV_PACKAGE_DIR, 'templates')
+    PROMPT_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'prompt')
+    WORKFLOW_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'workflow')
 
     # Prompt templates for each model
     PROMPT_TEMPLATES = {

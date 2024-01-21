@@ -204,6 +204,7 @@ class Document(BaseModel):
         return cls(path=path, doctype=doctype, lines=lines)
 
     def get_code(self) -> list[str]:
+        # FIXME: Remove template formatting detail, return only code lines
         lines = [
             self.id,
             f'```{self.doctype.code_block_type}'
@@ -260,6 +261,7 @@ class Hunk(BaseModel):
         self.add_marker(block)
 
     def get_code(self) -> list[str]:
+        # FIXME: Remove template formatting detail, return only code lines
         lines = [
             self.id,
             f'```{self.document.doctype.code_block_type}'
@@ -398,7 +400,6 @@ class Patch(BaseModel):
     def from_completion(cls,
                         document: Document,
                         completion: str,
-                        normalize: Callable[[str], str] = lambda s: s.rstrip()
                         ) -> 'Patch':
         hunks: list[Hunk] = []
         for code_block in extract_code_blocks(completion):
