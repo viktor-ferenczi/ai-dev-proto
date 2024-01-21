@@ -157,6 +157,23 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, failed, 'Some lengths failed')
 
     async def test_parallel_load(self):
+        await self.do_parallel_load()
+
+    async def test_parallel_load_regex(self):
+        await self.do_parallel_load(constraint=RegexConstraint('The answer for the question is:\n\n.*\n'))
+
+    async def test_parallel_load_json_schema(self):
+
+        class Answer(BaseModel):
+            reasoning: str
+            code_lines: list[str]
+
+        await self.do_parallel_load(constraint=JsonSchemaConstraint(Answer.model_json_schema()))
+
+    async def do_parallel_load(self, **extra):
+        kws = dict(temperature=0.5, **extra)
+        print(f'Params: {kws!r}')
+
         context_headroom_tokens = 100
 
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
@@ -165,7 +182,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         async def generate(instruction: str) -> str:
             instruction_tokens = self.engine.count_tokens(instruction)
             max_tokens = self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens
-            params = GenerationParams(max_tokens=max_tokens, temperature=0.5)
+            params = GenerationParams(max_tokens=max_tokens, **kws)
             completions = await self.engine.generate(system, instruction, params)
             return completions[0]
 
@@ -183,6 +200,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
 
     async def test_json_schema_constraint(self):
+
         class Fruit(BaseModel):
             kind: str
             color: str
@@ -208,10 +226,15 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
             Fruit(**json.loads(completion))
 
     async def test_regex_constraint(self):
+        await self.do_regex_constraint()
+        await self.do_regex_constraint(beam_search=True)
+        await self.do_regex_constraint(n=16, temperature=0.2)
+
+    async def do_regex_constraint(self, **extra):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
-        params = GenerationParams(max_tokens=50)
+        params = GenerationParams(max_tokens=50, **extra)
         constraint = RegexConstraint(r'\d+(\s*,\s*\d+)*\s*')
         completions = await self.engine.generate(system, instruction, params, constraint)
 
