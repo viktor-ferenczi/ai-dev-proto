@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from vllm_client import AsyncVllmClient, SamplingParams
 
 from .engine import Engine
-from .params import GenerationParams, GenerationConstraint, ConstraintType
+from .params import GenerationParams, Constraint, ConstraintType
 from ..common.config import C
 from ..common.util import get_prompt_template_for_model
 
@@ -19,6 +19,13 @@ class VllmEngine(Engine):
         self.max_context = C.CONTEXT_SIZE[self.model]
         self.optimal_parallel_sequences = C.OPTIMAL_PARALLEL_SEQUENCES[self.model]
 
+        self.supported_constraint_types = {
+            ConstraintType.JSON_SCHEMA,
+            ConstraintType.REGEX,
+            # FIXME: Enable once implemented in Outlines
+            # ConstraintType.GRAMMAR,
+        }
+
         self.prompt_template = get_prompt_template_for_model(self.model)
 
         self.client = AsyncVllmClient(self.base_url, logger=logger)
@@ -29,8 +36,7 @@ class VllmEngine(Engine):
     async def generate(self,
                        system: str,
                        instruction: str,
-                       params: GenerationParams,
-                       constraint: Optional[GenerationConstraint] = None) -> List[str]:
+                       params: GenerationParams) -> List[str]:
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": instruction}
@@ -45,7 +51,7 @@ class VllmEngine(Engine):
             use_beam_search=params.use_beam_search,
         )
 
-        extra = await self.format_extra(constraint)
+        extra = await self.format_extra(params)
         full_completions = await self.client.generate(prompt, sampling_params, extra)
 
         completions = []
@@ -60,15 +66,16 @@ class VllmEngine(Engine):
 
         return completions
 
-    constraint_modes = {
+    constraint_parameter_names = {
         ConstraintType.JSON_SCHEMA: 'schema',
         ConstraintType.REGEX: 'regex',
         ConstraintType.GRAMMAR: 'cfg',
     }
 
-    async def format_extra(self, constraint: GenerationConstraint) -> Optional[Dict[str, Any]]:
+    async def format_extra(self, params: GenerationParams) -> Optional[Dict[str, Any]]:
+        constraint = params.constraint
         if constraint is None:
             return None
 
-        constraint_mode = self.constraint_modes[constraint.type]
-        return {constraint_mode: constraint.value}
+        constraint_parameter_name = self.constraint_parameter_names[constraint.type]
+        return {constraint_parameter_name: constraint.value}

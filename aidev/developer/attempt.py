@@ -6,7 +6,7 @@ from ..engine.params import GenerationParams
 from ..sonar.issue import Issue
 
 
-class AttemptState(SimpleEnum):
+class AttemptState(str, SimpleEnum):
     GENERATED = 'GENERATED'
     INVALID = 'INVALID'
     BUILD_FAILED = 'BUILD_FAILED'

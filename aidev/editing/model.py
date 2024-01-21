@@ -75,7 +75,7 @@ from pydantic import BaseModel
 from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
 
 
-class DocType(SimpleEnum):
+class DocType(str, SimpleEnum):
     """Document type supported for editing by LLMs"""
 
     UNKNOWN = 'UNKNOWN'

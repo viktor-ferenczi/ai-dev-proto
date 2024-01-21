@@ -1,10 +1,11 @@
 from uuid import UUID, uuid1
-from enum import Enum
-from typing import Optional
+from typing import Optional, Iterable
 from pydantic import BaseModel
 
-from aidev.editing.model import Patch, Document, Hunk
-from aidev.engine.params import GenerationParams
+from ..common.util import SimpleEnum
+from ..editing.model import Patch, Document, Hunk
+from ..engine.engine import Engine
+from ..engine.params import GenerationParams
 
 
 class GenerationState(BaseModel):
@@ -36,8 +37,19 @@ class Generation(BaseModel):
     error: Optional[str]
     """Error message in the FAILED state. None if there is no error"""
 
+    def can_run_on(self, engine: Engine):
+        tokens_can_fit = self.params.max_tokens <= engine.max_context
+        constraint_is_supported = (
+                self.params.constraint is None or
+                self.params.constraint.type in engine.supported_constraint_types
+        )
+        return tokens_can_fit and constraint_is_supported
 
-class SourceState(Enum):
+    async def run_on(self, engine: Engine):
+        self.completions = await engine.generate(self.system, self.instruction, self.params)
+
+
+class SourceState(str, SimpleEnum):
     """Represents possible states of Source"""
     NEW = "NEW"
     RELEVANCE = "RELEVANCE"
@@ -91,6 +103,11 @@ class Source(BaseModel):
 
     error: Optional[str]
     """Error message in FAILED state. Can be None if the state is not FAILED"""
+
+    def iter_generations(self) -> Iterable[Generation]:
+        yield self.relevant_code_generation
+        yield from self.dependency_generations
+        yield self.implementation_generation
 
 
 class Feedback(BaseModel):
@@ -149,6 +166,15 @@ class Task(BaseModel):
     error: Optional[str]
     """Error message in FAILED state"""
 
+    def iter_generations(self) -> Iterable[Generation]:
+        for source in self.sources:
+            assert isinstance(source, Source)
+            yield from source.iter_generations()
+
+    @property
+    def may_need_generation(self):
+        return self.state in (TaskState.NEW, TaskState.WIP)
+
 
 class Solution(BaseModel):
     """Full workflow state while working on tasks applicable to the solution with a VCS working copy in a folder"""
@@ -158,3 +184,12 @@ class Solution(BaseModel):
 
     tasks: dict[str, Task]
     """All tasks by ID regardless of their state"""
+
+    def iter_generations(self) -> Iterable[Generation]:
+        for task in self.tasks.items():
+            assert isinstance(task, Task)
+            yield from task.iter_generations()
+
+    @property
+    def may_need_generation(self):
+        return any(task.may_need_generation for task in self.tasks)
