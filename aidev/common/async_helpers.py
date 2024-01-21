@@ -45,7 +45,7 @@ class AsyncPool:
     def task_count(self) -> int:
         return len(self.pending)
 
-    async def run(self, coroutine: Coroutine):
+    def run(self, coroutine: Coroutine):
         task = asyncio.create_task(coroutine)
         self.pending.add(task)
 
