@@ -41,9 +41,11 @@ class AsyncPool:
     def __init__(self):
         self.pending: Set[Future] = set()
 
-    @property
-    def task_count(self) -> int:
+    def __len__(self) -> int:
         return len(self.pending)
+
+    def __nonzero__(self) -> bool:
+        return bool(self.pending)
 
     def run(self, coroutine: Coroutine):
         task = asyncio.create_task(coroutine)
@@ -57,6 +59,9 @@ class AsyncPool:
             self.__cancel()
 
     async def wait(self):
+        if not self.pending:
+            return
+
         done, self.pending = await asyncio.wait(self.pending, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()

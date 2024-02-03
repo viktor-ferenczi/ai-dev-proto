@@ -1,12 +1,13 @@
 import asyncio
+import os
 import traceback
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
 from .model import Solution, Task, TaskState, Source, Generation, GenerationState, SourceState
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
-from ..common.util import render_workflow_template, regex_from_lines
+from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines
 from ..developer.project import Project
 from ..editing.model import Patch
 from ..engine.params import GenerationParams, Constraint
@@ -23,10 +24,10 @@ class TaskOrchestrator:
         super().__init__()
         self.solution: Solution = solution
         self.wip_tasks = {}
-        self.max_wip_tasks = C.MAX_WIP_TASKS
+        self.max_parallel_tasks = C.MAX_PARALLEL_TASKS
         self.working_copy_lock = asyncio.Lock()
 
-    @contextmanager
+    @asynccontextmanager
     async def working_copy(self, task: Task) -> AsyncContextManager[Project]:
         # FIXME: Multiple folder support with a semaphore
         project = Project(self.solution.folder, self.solution.name)
@@ -43,11 +44,15 @@ class TaskOrchestrator:
     async def run_until_complete(self):
         async with AsyncPool() as pool:
             while self.solution.has_any_tasks_remaining:
-                if len(self.wip_tasks) < self.max_wip_tasks:
+                if len(self.wip_tasks) < self.max_parallel_tasks:
                     self.pick_up_running_tasks(pool)
                     self.start_new_tasks(pool)
-                else:
+
+                if len(pool) >= self.max_parallel_tasks:
                     await pool.wait()
+                else:
+                    # FIXME: Polling loop, should listen on the relevant changes instead
+                    await asyncio.sleep(0.5)
 
     def pick_up_running_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
@@ -55,7 +60,7 @@ class TaskOrchestrator:
                 if task.id not in self.wip_tasks:
                     self.wip_tasks[task.id] = task
                     pool.run(self.process_task(task))
-                    if len(self.wip_tasks) == self.max_wip_tasks:
+                    if len(self.wip_tasks) == self.max_parallel_tasks:
                         return
 
     def start_new_tasks(self, pool: AsyncPool):
@@ -64,7 +69,7 @@ class TaskOrchestrator:
                 task.state = TaskState.WIP
                 self.wip_tasks[task.id] = task
                 pool.run(self.process_task(task))
-                if len(self.wip_tasks) == self.max_wip_tasks:
+                if len(self.wip_tasks) == self.max_parallel_tasks:
                     return
 
     async def process_task(self, task: Task):
@@ -81,6 +86,7 @@ class TaskOrchestrator:
                     await self.process_source(task, source)
                     if source.state == SourceState.FAILED:
                         task.state = TaskState.FAILED
+                        task.error = f'Source {source.document.path} failed: {source.error}'
                         return
 
             async with self.working_copy(task) as wc:
@@ -101,12 +107,12 @@ class TaskOrchestrator:
         paths = list(self.solution.iter_relative_source_paths())
         instruction = render_workflow_template(
             'find_relevant_sources',
-            paths=paths,
+            paths=join_lines(['```'] + paths + ['```']),
             task_description=task.description,
         )
 
         constraint = Constraint.from_regex(f'```\n{regex_from_lines(paths)}```\n')
-        params = GenerationParams(use_beam_search=True, max_tokens=4000, constraint=constraint)
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=4000, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.sources_generation = gen
@@ -114,18 +120,24 @@ class TaskOrchestrator:
 
         if gen.state == GenerationState.FAILED:
             task.state = TaskState.FAILED
-            task.error = f'Failed to generate the list of relevant source files'
+            task.error = f'Failed to generate the list of relevant source files: {gen.error}'
             return
 
-        lines = gen.completions[0].strip().split('\n')
-        if len(lines) <= 2:
+        for completion in gen.completions:
+            lines = completion.strip().split('\n')
+            if len(lines) > 2:
+                break
+        else:
             task.state = TaskState.FAILED
             task.error = f'Found no relevant source files'
             return
 
         assert lines[0] == '```'
         assert lines[-1] == '```'
-        task.sources = [Source.from_path(path) for path in lines[1:-1]]
+        task.sources = [
+            Source.from_path(os.path.join(self.solution.folder, path))
+            for path in lines[1:-1]
+        ]
 
     async def build_and_test(self, task: Task, wc: Project):
         error = wc.build()
@@ -159,16 +171,15 @@ class TaskOrchestrator:
         source.state = SourceState.COMPLETED
 
     async def find_relevant_code(self, task: Task, source: Source):
-        code_block_type = source.document.doctype.code_block_type
         instruction = render_workflow_template(
             'find_relevant_code',
-            code_block_type=code_block_type,
-            code_lines=source.document.lines,
+            source=join_lines(source.document.get_code()),
             task_description=task.description,
         )
 
+        code_block_type = source.document.doctype.code_block_type
         constraint = Constraint.from_regex(f'```{code_block_type}\n{regex_from_lines(source.document.lines)}```\n')
-        params = GenerationParams(use_beam_search=True, max_tokens=4000, constraint=constraint)
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=4000, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
         source.relevant_generation = gen
@@ -179,8 +190,14 @@ class TaskOrchestrator:
             source.error = f'Failed to find relevant code lines'
             return
 
-        patch = Patch.from_completion(source.doc, gen.completions[0])
-        if not patch.hunks:
+        for completion in gen.completions:
+            try:
+                patch = Patch.from_completion(source.document, completion)
+            except ValueError:
+                continue
+            if patch.hunks:
+                break
+        else:
             source.state = TaskState.FAILED
             source.error = f'Found no relevant code lines'
             return
@@ -193,20 +210,18 @@ class TaskOrchestrator:
         source.dependencies = []
 
     async def implement_task(self, task: Task, source: Source):
-        code_block_type = source.document.doctype.code_block_type
-        code_lines = source.relevant.get_code()[2:-1]
         instruction = render_workflow_template(
-            'find_relevant_code',
-            code_block_type=code_block_type,
-            code_lines=code_lines,  # FIXME: Remove indexing once the FIXME in Hunk.get_code is done
+            'implement_task',
+            source=join_lines(source.relevant.get_code()),
             task_description=task.description,
         )
 
-        constraint = Constraint.from_regex(f'```{code_block_type}\n{regex_from_lines(code_lines)}```\n')
-        params = GenerationParams(use_beam_search=True, max_tokens=4000, constraint=constraint)
+        code_block_type = source.document.doctype.code_block_type
+        constraint = Constraint.from_regex(f'```{code_block_type}\n(.*?\n)*```\n')
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=4000, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
-        source.relevant_generation = gen
+        source.patch_generation = gen
         await gen.wait()
 
         if gen.state == GenerationState.FAILED:
@@ -214,11 +229,17 @@ class TaskOrchestrator:
             source.error = f'Failed to implement the task'
             return
 
-        patch = Patch.from_completion(source.doc, gen.completions[0])
-        if not patch.hunks:
+        for completion in gen.completions:
+            code_blocks = extract_code_blocks(completion)
+            if len(code_blocks) != 1:
+                continue
+            replacement_lines = code_blocks[0].split('\n')
+            break
+        else:
             source.state = TaskState.FAILED
             source.error = f'Empty implementation'
             return
 
-        source.patch = patch
+        source.relevant.replacement = replacement_lines
+        source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
         source.implementation = source.patch.apply()

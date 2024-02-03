@@ -1,5 +1,6 @@
 import asyncio
 import os
+from traceback import format_exc
 from typing import Optional, Iterable
 from pydantic import BaseModel
 
@@ -10,7 +11,7 @@ from ..engine.engine import Engine
 from ..engine.params import GenerationParams
 
 
-class GenerationState(BaseModel):
+class GenerationState(str, SimpleEnum):
     """Represents possible states of Generation"""
     PENDING = "PENDING"
     GENERATING = "GENERATING"
@@ -63,7 +64,14 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        self.completions = await engine.generate(self.system, self.instruction, self.params)
+        self.state = GenerationState.GENERATING
+        try:
+            self.completions = await engine.generate(self.system, self.instruction, self.params)
+        except Exception:
+            self.state = GenerationState.FAILED
+            self.error = format_exc()
+        else:
+            self.state = GenerationState.COMPLETED
 
     async def wait(self):
         # FIXME: Replace with waiting on a state change async event
@@ -132,9 +140,17 @@ class Source(BaseModel):
         )
 
     def iter_generations(self) -> Iterable[Generation]:
-        yield self.relevant_generation
-        yield from self.dependency_generations
-        yield self.patch_generation
+        if self.state != 'PENDING':
+            return
+
+        if self.relevant_generation is not None:
+            yield self.relevant_generation
+
+        if self.dependency_generations is not None:
+            yield from self.dependency_generations
+
+        if self.patch_generation is not None:
+            yield self.patch_generation
 
 
 class Feedback(BaseModel):
@@ -147,7 +163,7 @@ class Feedback(BaseModel):
     """The criticism provided in Markdown format"""
 
 
-class TaskState:
+class TaskState(str, SimpleEnum):
     """Possible states of a Task"""
     NEW = "NEW"
     WIP = "WIP"
@@ -197,18 +213,20 @@ class Task(BaseModel):
     """Error message in FAILED state"""
 
     @property
-    def may_need_generation(self) -> bool:
-        return self.state in (TaskState.NEW, TaskState.WIP)
-
-    @property
     def is_remaining(self) -> bool:
         return self.state in (TaskState.NEW, TaskState.WIP)
 
     def iter_generations(self) -> Iterable[Generation]:
-        yield self.sources_generation
-        for source in self.sources:
-            assert isinstance(source, Source)
-            yield from source.iter_generations()
+        if self.state != 'WIP':
+            return
+
+        if self.sources_generation is not None:
+            yield self.sources_generation
+
+        if self.sources is not None:
+            for source in self.sources:
+                assert isinstance(source, Source)
+                yield from source.iter_generations()
 
 
 class Solution(BaseModel):
@@ -224,16 +242,16 @@ class Solution(BaseModel):
     tasks: dict[str, Task]
     """All tasks by ID regardless of their state"""
 
-    @property
-    def may_need_generation(self) -> bool:
-        return any(task.may_need_generation for task in self.tasks.values())
+    @classmethod
+    def new(cls, name: str, folder: str) -> 'Solution':
+        return cls(name=name, folder=folder, tasks={})
 
     @property
     def has_any_tasks_remaining(self) -> bool:
         return any(task.is_remaining for task in self.tasks.values())
 
     def iter_generations(self) -> Iterable[Generation]:
-        for task in self.tasks.items():
+        for task in self.tasks.values():
             assert isinstance(task, Task)
             yield from task.iter_generations()
 

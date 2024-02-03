@@ -204,7 +204,6 @@ class Document(BaseModel):
         return cls(path=path, doctype=doctype, lines=lines)
 
     def get_code(self) -> list[str]:
-        # FIXME: Remove template formatting detail, return only code lines
         lines = [
             self.id,
             f'```{self.doctype.code_block_type}'
@@ -261,7 +260,6 @@ class Hunk(BaseModel):
         self.add_marker(block)
 
     def get_code(self) -> list[str]:
-        # FIXME: Remove template formatting detail, return only code lines
         lines = [
             self.id,
             f'```{self.document.doctype.code_block_type}'

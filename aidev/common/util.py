@@ -2,6 +2,7 @@ import asyncio
 import difflib
 import os
 import re
+import shutil
 from enum import Enum
 from logging import Logger, INFO, getLogger, StreamHandler, Formatter
 from typing import Iterable
@@ -183,3 +184,10 @@ def render_workflow_template(_name: str, **kws) -> str:
 
 def regex_from_lines(lines: list[str]) -> str:
     return ''.join(f'({re.escape(path)}\n)?' for path in lines)
+
+
+def copy_directory(src: str, dst: str):
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    os.makedirs(dst)
+    shutil.copytree(src, dst, dirs_exist_ok=True)

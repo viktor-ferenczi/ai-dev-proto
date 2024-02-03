@@ -1,13 +1,16 @@
+import asyncio
+
 from ..common.async_helpers import AsyncPool
 from ..engine.engine import Engine
-from .model import Solution
+from .model import Solution, GenerationState
 
 
 class GenerationOrchestrator:
     """Orchestrates LLMs to complete generations"""
 
-    def __init__(self):
+    def __init__(self, solution: Solution):
         super().__init__()
+        self.solution: Solution = solution
         self.engines: list[Engine] = []
         self.max_parallel_generations = 0
 
@@ -15,17 +18,25 @@ class GenerationOrchestrator:
         self.engines.append(engine)
         self.max_parallel_generations += engine.optimal_parallel_sequences
 
-    async def run_until_complete(self, solution: Solution):
+    async def run_until_complete(self):
         async with AsyncPool() as pool:
-            while solution.may_need_generation:
-                self.start_generations(pool, solution)
-                await pool.wait()
+            while self.solution.has_any_tasks_remaining:
+                self.start_new_generations(pool)
+                if len(pool) >= self.max_parallel_generations:
+                    await pool.wait()
+                else:
+                    # FIXME: Polling loop, should listen on the relevant changes instead
+                    await asyncio.sleep(0.5)
 
-    def start_generations(self, pool: AsyncPool, solution: Solution):
-        for generation in solution.iter_generations():
+    def start_new_generations(self, pool: AsyncPool):
+        for generation in self.solution.iter_generations():
+
+            if generation.state != GenerationState.PENDING:
+                continue
+
             for engine in self.engines:
                 if generation.can_run_on(engine):
                     pool.run(generation.run_on(engine))
-                    if pool.task_count >= self.max_parallel_generations:
+                    if len(pool) >= self.max_parallel_generations:
                         return
                     break
