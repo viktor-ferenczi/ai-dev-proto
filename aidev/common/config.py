@@ -35,7 +35,7 @@ class Config:
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Task orchestration
-    MAX_PARALLEL_TASKS: int = 16
+    MAX_PARALLEL_TASKS: int = 10
 
     # Markdown code block type by file extension
     DOCTYPE_BY_EXTENSION: Dict[str, str] = {

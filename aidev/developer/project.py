@@ -17,7 +17,7 @@ class Project:
 
         self.config_path: str = os.path.join(self.project_dir, 'aidev.toml')
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
-        self.attempts_dir: str = os.path.join(self.aidev_dir, "attempts")
+        self.tasks_dir: str = os.path.join(self.aidev_dir, "tasks")
         self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
 
         self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
@@ -26,7 +26,7 @@ class Project:
         self.sqlite_db_path = os.path.join(self.tests_project_dir, 'FoodShip.Test.db')
 
         os.makedirs(self.aidev_dir, exist_ok=True)
-        os.makedirs(self.attempts_dir, exist_ok=True)
+        os.makedirs(self.tasks_dir, exist_ok=True)
 
         self.has_repository = os.path.isdir(os.path.join(self.project_dir, '.git'))
 

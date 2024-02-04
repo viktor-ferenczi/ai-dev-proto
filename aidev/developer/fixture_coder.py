@@ -217,7 +217,7 @@ class FixtureCoder(BaseCoder):
         attempts = [new_attempt(completion) for completion in completions]
         attempts.sort(key=lambda attempt_: attempt_.count_modified_lines())
 
-        issue_log_dir = os.path.join(self.project.attempts_dir, f'{controller.name}Controller.{method.name}')
+        issue_log_dir = os.path.join(self.project.tasks_dir, f'{controller.name}Controller.{method.name}')
         os.makedirs(issue_log_dir, exist_ok=True)
         index = get_next_free_numbered_file(issue_log_dir)
         for offset, attempt in enumerate(attempts):

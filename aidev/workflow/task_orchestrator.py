@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import traceback
 from contextlib import asynccontextmanager
@@ -74,19 +75,26 @@ class TaskOrchestrator:
 
     async def process_task(self, task: Task):
         try:
+            self.dump_task(task)
+
             if task.sources is None:
                 await self.find_relevant_sources(task)
                 if task.state != TaskState.WIP:
                     return
+
+            self.dump_task(task)
 
             if not task.sources:
                 task.state = TaskState.FAILED
                 task.error = f'Found no relevant source files for this task'
                 return
 
+            self.dump_task(task)
+
             for source in task.sources:
                 if source.state == SourceState.PENDING:
                     await self.process_source(task, source)
+                    self.dump_task(task)
                     if source.state == SourceState.FAILED:
                         task.state = TaskState.FAILED
                         task.error = f'{source.document.path[len(self.solution.folder) + 1:]}: {source.error}'
@@ -109,9 +117,19 @@ class TaskOrchestrator:
         except Exception:
             task.state = TaskState.FAILED
             task.error = traceback.format_exc()
+            print(f'Task {task.id} failed with an unexpected error:')
+            print(task.error)
 
         finally:
+            self.dump_task(task)
             del self.wip_tasks[task.id]
+
+    def dump_task(self, task: Task) -> None:
+        dir_path = os.path.join(self.solution.folder, '.aidev', 'tasks')
+        path = os.path.join(dir_path, f'{task.id}.{task.state.value.lower()}.json')
+        os.makedirs(dir_path, exist_ok=True)
+        with open(path, 'wt', encoding='utf-8-sig') as f:
+            f.write(task.model_dump_json(indent=2))
 
     async def find_relevant_sources(self, task: Task):
         paths = list(self.solution.iter_relative_source_paths())
