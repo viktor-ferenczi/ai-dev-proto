@@ -7,10 +7,11 @@ from typing import Optional
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines
 from aidev.developer.project import Project
+from aidev.editing.model import Document
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.sonar.client import SonarClient
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
-from aidev.workflow.model import Solution, Task, Source
+from aidev.workflow.model import Solution, Task
 from aidev.workflow.task_orchestrator import TaskOrchestrator
 
 
@@ -117,13 +118,16 @@ async def command_fix(project: Project, branch: str, source: str):
     print(f'Loading issues from SonarQube')
     sonar = SonarClient(project.project_name)
     for issue in sonar.get_issues():
-        source_path = os.path.join(solution.folder, issue.sourceRelPath)
-        source = Source.from_path(source_path)
+
         if issue.textRange is None:
             description = issue.message
         else:
-            lines = source.document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
-            description = f'{issue.message}\n\nSource lines:\n```{source.document.doctype.code_block_type}\n{join_lines(lines)}\n```\n'
+            source_path = os.path.join(solution.folder, issue.sourceRelPath)
+            document = Document.from_file(source_path)
+            code_block_type = document.doctype.code_block_type
+            code_lines = document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
+            description = f'{issue.message}\n\nSource:{issue.sourceRelPath}\n\n```{code_block_type}\n{join_lines(code_lines)}\n```\n'
+
         task = Task(
             id=issue.key,
             ticket=issue.key,
@@ -131,8 +135,10 @@ async def command_fix(project: Project, branch: str, source: str):
             branch=branch,
             sources=[source],
         )
+
         solution.tasks[task.id] = task
-        print(f'Task: {task.id}')
+
+    print(f'Picked up {len(solution.tasks)} issues')
 
     generation_orchestrator = GenerationOrchestrator(solution)
 

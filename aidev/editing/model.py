@@ -72,7 +72,7 @@ from typing import Optional, Iterable
 
 from pydantic import BaseModel
 
-from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
+from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks, replace_tripple_backquote
 
 
 class DocType(str, SimpleEnum):
@@ -198,7 +198,7 @@ class Document(BaseModel):
 
     @property
     def code_block(self) -> str:
-        return f'```{self.doctype.code_block_type}\n{self.text}\n```'
+        return f'```{self.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
     def code_block_lines(self) -> list[str]:
@@ -257,7 +257,7 @@ class Hunk(BaseModel):
 
     @property
     def code_block(self) -> str:
-        return f'```{self.document.doctype.code_block_type}\n{self.text}\n```'
+        return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
     def code_block_lines(self) -> list[str]:

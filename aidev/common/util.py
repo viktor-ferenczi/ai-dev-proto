@@ -34,6 +34,14 @@ def join_lines(lines: Iterable[str]) -> str:
     return '\n'.join(lines)
 
 
+def join_lines_lf(lines: Iterable[str]) -> str:
+    return ''.join(f'{line}\n' for line in lines)
+
+
+def replace_tripple_backquote(text: str) -> str:
+    return text.replace('```', r'\`\`\`')
+
+
 def count_changed_lines(original: str, replacement: str) -> int:
     """
     Counts the number of lines changed, added, or removed between the original and replacement strings.
@@ -168,18 +176,40 @@ def init_logger(loglevel=INFO) -> Logger:
     return logger
 
 
-def render_template(_path: str, **kws) -> str:
+def render_template(_path: str, **variables) -> str:
     if not os.path.exists(_path):
         raise FileNotFoundError(f"The file {_path} does not exist.")
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(_path)))
     template = env.get_template(os.path.basename(_path))
-    return template.render(**kws)
+    return template.render(**variables)
 
 
-def render_workflow_template(_name: str, **kws) -> str:
+def render_workflow_template(_name: str, **variables) -> str:
     path = os.path.join(C.WORKFLOW_TEMPLATES_DIR, f'{_name}.jinja')
-    return render_template(path, **kws)
+    return render_template(path, **variables)
+
+
+def render_markdown_template(_name: str, **variables) -> str:
+    path = os.path.join(C.MARKDOWN_TEMPLATES_DIR, f'{_name}.jinja')
+    indented_markdown = render_template(path, **variables)
+    return unindent_markdown(indented_markdown)
+
+
+def unindent_markdown(md: str) -> str:
+    lines = md.split('\n')
+
+    in_code = False
+    for i, line in enumerate(lines):
+
+        if not in_code:
+            lines[i] = line = line.strip()
+
+        if line.startswith('```'):
+            in_code = not in_code
+            continue
+
+    return join_lines(lines)
 
 
 def regex_from_lines(lines: list[str]) -> str:

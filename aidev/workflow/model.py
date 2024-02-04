@@ -5,7 +5,7 @@ from typing import Optional, Iterable
 from pydantic import BaseModel
 
 from ..common.config import C
-from ..common.util import SimpleEnum
+from ..common.util import SimpleEnum, join_lines
 from ..editing.model import Patch, Document, Hunk
 from ..engine.engine import Engine
 from ..engine.params import GenerationParams

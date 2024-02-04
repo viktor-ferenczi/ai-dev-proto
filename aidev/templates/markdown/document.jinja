@@ -1,0 +1,13 @@
+{% if document %}
+
+    - Path: `{{ document.path }}`
+    - DocType: `{{ document.doctype }}`
+
+    {% set text = document.code_block %}
+    {% include 'text.jinja' with context %}
+
+{% else %}
+
+    None
+
+{% endif %}

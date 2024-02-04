@@ -1,0 +1,45 @@
+{% if generation %}
+
+    - State: {{ generation.state }}
+    - Completions: {{ generation.completions | length }}
+
+    {% if generation.error %}
+        <details open>
+            <summary>Error</summary>
+            {% set error = generation.error %}
+            {% include 'error.jinja' with context %}
+        </details>
+    {% endif %}
+
+    <details>
+        <summary>Params</summary>
+        {% set text = generation.params | pprint %}
+        {% include 'text.jinja' with context %}
+    </details>
+
+    <details>
+        <summary>System</summary>
+        {% set text = generation.system  %}
+        {% include 'text.jinja' with context %}
+    </details>
+
+    <details>
+        <summary>Instruction</summary>
+        {% set text = generation.instruction  %}
+        {% include 'text.jinja' with context %}
+    </details>
+
+    {% for text in generation.completions %}
+
+        <details>
+            <summary>Completion {{ loop.index }}</summary>
+            {% include 'text.jinja' with context %}
+        </details>
+
+    {% endfor %}
+
+{% else %}
+
+    None
+
+{% endif %}

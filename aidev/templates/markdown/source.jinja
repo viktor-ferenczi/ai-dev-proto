@@ -1,0 +1,56 @@
+{% set document = source.document %}
+
+- State: {{ source.state }}
+
+- Path: {{ document.path }}
+
+{% if source.error %}
+    <details open>
+        <summary>Error</summary>
+        {% set error = source.error %}
+        {% include 'error.jinja' with context %}
+    </details>
+{% endif %}
+
+<details>
+    <summary>Relevant code identification</summary>
+    {% set generation = source.relevant_generation %}
+    {% include 'generation.jinja' with context %}
+</details>
+
+{% if source.dependency_generations %}
+    <details>
+        <summary>Dependency generations</summary>
+
+        {% for dependency_generation in source.dependency_generations %}
+
+            <details>
+                <summary>Generation {{ loop.index }}</summary>
+
+                {% set generation = dependency_generation %}
+                {% include 'generation.jinja' with context %}
+
+            </details>
+
+        {% endfor %}
+
+    </details>
+{% endif %}
+
+<details>
+    <summary>Patch generation</summary>
+    {% set generation = source.patch_generation %}
+    {% include 'generation.jinja' with context %}
+</details>
+
+<details>
+    <summary>Patch</summary>
+    {% set patch = source.patch %}
+    {% include 'patch.jinja' with context %}
+</details>
+
+<details>
+    <summary>Implementation</summary>
+    {% set implementation = source.implementation %}
+    {% include 'document.jinja' with context %}
+</details>

@@ -129,7 +129,7 @@ class TaskOrchestrator:
 
     def dump_task(self, task: Task) -> None:
         dir_path = os.path.join(self.solution.folder, '.aidev', 'tasks')
-        path = os.path.join(dir_path, f'{task.id}.{task.state.value.lower()}.json')
+        path = os.path.join(dir_path, f'{task.id}.json')
         os.makedirs(dir_path, exist_ok=True)
         with open(path, 'wt', encoding='utf-8-sig') as f:
             f.write(task.model_dump_json(indent=2))
@@ -204,7 +204,7 @@ class TaskOrchestrator:
     async def find_relevant_code(self, task: Task, source: Source):
         instruction = render_workflow_template(
             'find_relevant_code',
-            source=join_lines(source.document.get_code()),
+            source=source.document.code_block,
             task_description=task.description,
         )
 
@@ -243,7 +243,7 @@ class TaskOrchestrator:
     async def implement_task(self, task: Task, source: Source):
         instruction = render_workflow_template(
             'implement_task',
-            source=join_lines(source.relevant.get_code()),
+            source=source.relevant.code_block,
             task_description=task.description,
         )
 
