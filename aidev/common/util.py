@@ -213,7 +213,7 @@ def unindent_markdown(md: str) -> str:
 
 
 def regex_from_lines(lines: list[str]) -> str:
-    return ''.join(f'({re.escape(path)}\n)?' for path in lines)
+    return ''.join(fr'({re.escape(path)}\n)?' for path in lines)
 
 
 def copy_directory(src: str, dst: str):

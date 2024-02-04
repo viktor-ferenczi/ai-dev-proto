@@ -112,11 +112,12 @@ async def command_fix(project: Project, branch: str, source: str):
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')
 
-    print(f'Analyzing the project with SonarQube')
-    project.analyze()
+    sonar = SonarClient(project.project_name)
+    if not sonar.get_issues():
+        print(f'Analyzing the project with SonarQube')
+        project.analyze()
 
     print(f'Loading issues from SonarQube')
-    sonar = SonarClient(project.project_name)
     for issue in sonar.get_issues():
 
         if issue.textRange is None:
@@ -126,14 +127,18 @@ async def command_fix(project: Project, branch: str, source: str):
             document = Document.from_file(source_path)
             code_block_type = document.doctype.code_block_type
             code_lines = document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
-            description = f'{issue.message}\n\nSource:{issue.sourceRelPath}\n\n```{code_block_type}\n{join_lines(code_lines)}\n```\n'
+            description = (
+                f'{issue.message}\n\n'
+                'This issue was reported for this source file: `{issue.sourceRelPath}`\n\n'
+                f'Within that source file for these lines of code:\n\n'
+                f'```{code_block_type}\n{join_lines(code_lines)}\n```\n'
+            )
 
         task = Task(
             id=issue.key,
             ticket=issue.key,
             description=description,
             branch=branch,
-            sources=[source],
         )
 
         solution.tasks[task.id] = task

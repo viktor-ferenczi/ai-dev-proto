@@ -60,5 +60,5 @@ class TaskOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             print(line)
         print()
 
-        self.assertEqual(9, len(implementation.code_block_lines))
+        self.assertEqual(8, len(implementation.code_block_lines))
         self.assertTrue(any('WriteLine' in line for line in implementation.lines))
