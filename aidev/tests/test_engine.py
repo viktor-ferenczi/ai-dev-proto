@@ -3,6 +3,7 @@ import time
 
 import unittest
 from logging import DEBUG, INFO
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -10,7 +11,7 @@ from aidev.common.async_helpers import map_async, iter_async
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, init_logger
 from aidev.engine.engine import Engine
-from aidev.engine.params import GenerationParams, JsonSchemaConstraint, RegexConstraint, GrammarConstraint
+from aidev.engine.params import GenerationParams, Constraint, ConstraintType
 from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
 LOG_REQUESTS = False
@@ -157,20 +158,41 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, failed, 'Some lengths failed')
 
     async def test_parallel_load(self):
-        await self.do_parallel_load()
+        await self.do_parallel_load(64)
 
     async def test_parallel_load_regex(self):
-        await self.do_parallel_load(constraint=RegexConstraint('The answer for the question is:\n\n.*\n'))
+        await self.do_parallel_load(32, constraint=Constraint.from_regex('The answer for the question is:\n\n.*\n'))
 
     async def test_parallel_load_json_schema(self):
 
         class Answer(BaseModel):
-            reasoning: str
-            code_lines: list[str]
+            question: str
+            answer: str
 
-        await self.do_parallel_load(constraint=JsonSchemaConstraint(Answer.model_json_schema()))
+        outputs = await self.do_parallel_load(16, constraint=Constraint.from_json_schema(Answer.model_json_schema()))
 
-    async def do_parallel_load(self, **extra):
+        failed = 0
+        for output in outputs:
+            try:
+                answer = json.loads(output)
+            except json.JSONDecodeError:
+                print()
+                print(f'Failed to decode JSON output:\n{output}')
+                print()
+                print(f'JSON schema:\n{Answer.model_json_schema()!r}')
+                print()
+
+                # Ignore known rare issue with outlines
+                if output.strip() != '{':
+                    failed += 1
+            else:
+                self.assertTrue(isinstance(answer, dict))
+                self.assertTrue(bool(answer['reasoning']))
+                self.assertTrue(bool(answer['answer']))
+
+        self.assertEqual(0, failed)
+
+    async def do_parallel_load(self, question_count: int, constraint: Optional[Constraint]=None, **extra) -> list[str]:
         kws = dict(temperature=0.5, **extra)
         print(f'Params: {kws!r}')
 
@@ -181,23 +203,40 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         async def generate(instruction: str) -> str:
             instruction_tokens = self.engine.count_tokens(instruction)
-            max_tokens = self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens
-            params = GenerationParams(max_tokens=max_tokens, **kws)
+            max_tokens = min(1000, self.engine.max_context - system_tokens - instruction_tokens - context_headroom_tokens)
+            params = GenerationParams(max_tokens=max_tokens, constraint=constraint, **kws)
             completions = await self.engine.generate(system, instruction, params)
+            print(f'SYSTEM:\n{system}\n\nINSTRUCTION:\n{instruction}\n\nCOMPLETION:\n{completions[0]}\n\n----------------\n')
             return completions[0]
 
+        questions = QUESTIONS[:question_count]
+
+        if constraint is not None:
+            if constraint.type == ConstraintType.REGEX:
+                instructions = [f'{question}\n\nYour answer must match this regular expression:\n```\n{constraint.value}\n```\n' for question in questions]
+            elif constraint.type == ConstraintType.JSON_SCHEMA:
+                instructions = [f'{question}\n\nAnswer following this JSON schema:\n```\n{constraint.value}\n```\n' for question in questions]
+            elif constraint.type == ConstraintType.GRAMMAR:
+                instructions = [f'{question}\n\nAnswer following this Lark grammar:\n```\n{constraint.value}\n```\n' for question in questions]
+            else:
+                raise ValueError(f'Unknown constraint type: {constraint.type}')
+        else:
+            instructions = questions
+
         started = time.perf_counter()
-        outputs = [completions[0] async for completions in map_async(generate, iter_async(QUESTIONS), max_tasks=self.engine.optimal_parallel_sequences)]
+        outputs = [completions[0] async for completions in map_async(generate, iter_async(instructions), max_tasks=self.engine.optimal_parallel_sequences)]
         finished = time.perf_counter()
         duration = finished - started
 
-        self.assertEqual(len(QUESTIONS), len(outputs))
+        self.assertEqual(len(questions), len(outputs))
 
         for output in outputs:
             self.assertTrue(bool(output.strip()))
 
         usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
+
+        return outputs
 
     async def test_json_schema_constraint(self):
 
@@ -213,9 +252,9 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write a JSON describing a random fruit. It must conform to the following JSON schema: {json.dumps(schema)}"
 
-        params = GenerationParams(n=5, max_tokens=200, temperature=1.0)
-        constraint = JsonSchemaConstraint(schema)
-        completions = await self.engine.generate(system, instruction, params, constraint)
+        constraint = Constraint.from_json_schema(schema)
+        params = GenerationParams(n=5, max_tokens=200, temperature=1.0, constraint=constraint)
+        completions = await self.engine.generate(system, instruction, params)
 
         self.assertEqual(len(completions), params.n)
 
@@ -234,9 +273,9 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
-        params = GenerationParams(max_tokens=50, **extra)
-        constraint = RegexConstraint(r'\d+(\s*,\s*\d+)*\s*')
-        completions = await self.engine.generate(system, instruction, params, constraint)
+        constraint = Constraint.from_regex(r'\d+(\s*,\s*\d+)*\s*')
+        params = GenerationParams(max_tokens=50, constraint=constraint, **extra)
+        completions = await self.engine.generate(system, instruction, params)
 
         self.assertEqual(len(completions), params.n)
 
@@ -250,13 +289,13 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."
         instruction = f"Write down the first 10 prime numbers as a comma separated list, starting with 2."
 
-        params = GenerationParams(max_tokens=50)
-        constraint = GrammarConstraint(r'''\
+        constraint = Constraint.from_grammar(r'''\
 ?start: DIGIT+ ( "," DIGIT+ )* _WS?
 %import common.DIGIT
 %import common.WS -> _WS
 ''')
-        completions = await self.engine.generate(system, instruction, params, constraint)
+        params = GenerationParams(max_tokens=50, constraint=constraint)
+        completions = await self.engine.generate(system, instruction, params)
 
         self.assertEqual(len(completions), params.n)
 

@@ -4,7 +4,7 @@ from re import escape
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines
 from aidev.editing.model import Document, Block, Hunk, MARKER_NAME
-from aidev.engine.params import GenerationParams, RegexConstraint
+from aidev.engine.params import GenerationParams, Constraint
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT, ADD_TO_CARD_TODO_RELEVANT_HUNK
 
@@ -79,13 +79,13 @@ Take a deep breath and write the code blocks:
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens)
-
         pattern = ''.join(f'({escape(line)}\n)?' for line in doc.lines)
         pattern = f'```{doc.doctype.code_block_type}\n{pattern}\n```\n'
-        constraint = RegexConstraint(pattern)
+        constraint = Constraint.from_regex(pattern)
 
-        completions = await engine.generate(system, instruction, params, constraint)
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)
+
+        completions = await engine.generate(system, instruction, params)
 
         shortest = min(completions, key=len)
         print(shortest)
@@ -142,12 +142,12 @@ single code block.
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        params = GenerationParams(n=16, use_beam_search=True, max_tokens=max_tokens)
-
         pattern = f'```{doc.doctype.code_block_type}\n(.*?\n)+```\n'
-        constraint = RegexConstraint(pattern)
+        constraint = Constraint.from_regex(pattern)
 
-        completions = await engine.generate(system, instruction, params, constraint)
+        params = GenerationParams(n=16, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)
+
+        completions = await engine.generate(system, instruction, params)
 
         for completion in completions:
             print(completion)

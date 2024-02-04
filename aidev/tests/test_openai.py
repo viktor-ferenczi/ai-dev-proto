@@ -151,8 +151,8 @@ class AsyncOpenAITest(unittest.IsolatedAsyncioTestCase):
         started = time.perf_counter()
         async with AsyncPool() as pool:
             for question in QUESTIONS:
-                if pool.task_count < self.max_parallel_connections:
-                    await pool.run(self.generate(question))
+                if len(pool) < self.max_parallel_connections:
+                    pool.run(self.generate(question))
                 else:
                     await pool.wait()
         finished = time.perf_counter()

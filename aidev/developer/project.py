@@ -28,6 +28,8 @@ class Project:
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.attempts_dir, exist_ok=True)
 
+        self.has_repository = os.path.isdir(os.path.join(self.project_dir, '.git'))
+
     def load_config(self):
         if os.path.exists(self.config_path):
             C.load(self.config_path)
@@ -55,6 +57,9 @@ class Project:
         self.must_run_command('end analyzing project', ['dotnet', 'sonarscanner', 'end', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
 
     def get_current_branch(self) -> str:
+        if not self.has_repository:
+            return ''
+
         return check_output(["git", "branch", "--show-current"], cwd=self.project_dir).decode('utf-8').strip()
 
     def ensure_branch(self, name: str):
@@ -63,24 +68,45 @@ class Project:
                 self.checkout_new_branch(name)
 
     def checkout_branch(self, name: str) -> str:
+        if not self.has_repository:
+            return ''
+
         return self.try_run_command('checkout branch', ["git", "checkout", name])
 
     def checkout_new_branch(self, name: str):
+        if not self.has_repository:
+            return
+
         self.must_run_command('create branch', ["git", "checkout", "-b", name])
 
     def checkout_head(self):
+        if not self.has_repository:
+            return
+
         self.must_run_command('checkout HEAD', ["git", "checkout", "HEAD"])
 
     def roll_back_changes(self, path: str):
+        if not self.has_repository:
+            return
+
         self.must_run_command('roll back changes', ["git", "checkout", path])
 
     def commit(self, message: str):
+        if not self.has_repository:
+            return
+
         self.must_run_command(f'commit staged changes', ["git", "commit", "-m", message])
 
     def stage_change(self, path: str):
+        if not self.has_repository:
+            return
+
         self.must_run_command('stage change', ["git", "add", path])
 
     def has_changes(self) -> bool:
+        if not self.has_repository:
+            return False
+
         _, output = self.run_command('check staged changes', ['git', 'status'])
         return 'nothing to commit, working tree clean' not in output
 

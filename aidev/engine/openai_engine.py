@@ -4,7 +4,7 @@ from typing import List, Optional
 from openai import AsyncOpenAI
 
 from .engine import Engine
-from .params import GenerationParams, GenerationConstraint
+from .params import GenerationParams, Constraint
 from .usage import Usage
 from ..common.config import C
 from ..tokenizer.tokenizer import get_tokenizer
@@ -30,12 +30,11 @@ class OpenAIEngine(Engine):
     async def generate(self,
                        system: str,
                        instruction: str,
-                       params: GenerationParams,
-                       constraint: Optional[GenerationConstraint] = None) -> List[str]:
-        if constraint is not None:
-            raise ValueError('Constraints are not supported with the OpenAI API')
+                       params: GenerationParams) -> List[str]:
         if params.use_beam_search:
             raise ValueError('Beam search is not supported with the OpenAI API')
+        if params.constraint is not None:
+            raise ValueError('Constraints are not supported with the OpenAI API')
 
         messages = [
             {"role": "system", "content": system},
