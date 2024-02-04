@@ -112,8 +112,8 @@ async def command_fix(project: Project, branch: str, source: str):
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')
 
-    # print(f'Analyzing the project with SonarQube')
-    # project.analyze()
+    print(f'Analyzing the project with SonarQube')
+    project.analyze()
 
     print(f'Loading issues from SonarQube')
     sonar = SonarClient(project.project_name)
