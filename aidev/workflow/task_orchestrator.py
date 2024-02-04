@@ -105,6 +105,7 @@ class TaskOrchestrator:
 
                 for source in task.sources:
                     source.implementation.write()
+                    wc.stage_change(source.implementation.path)
 
                 await self.build_and_test(task, wc)
                 if task.state != TaskState.WIP:
