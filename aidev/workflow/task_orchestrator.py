@@ -79,20 +79,30 @@ class TaskOrchestrator:
                 if task.state != TaskState.WIP:
                     return
 
-            assert task.sources, f'The task has no sources assigned: {task.id}'
+            if not task.sources:
+                task.state = TaskState.FAILED
+                task.error = f'Found no relevant source files for this task'
+                return
 
             for source in task.sources:
                 if source.state == SourceState.PENDING:
                     await self.process_source(task, source)
                     if source.state == SourceState.FAILED:
                         task.state = TaskState.FAILED
-                        task.error = f'Source {source.document.path} failed: {source.error}'
+                        task.error = f'{source.document.path[len(self.solution.folder) + 1:]}: {source.error}'
                         return
 
             async with self.working_copy(task) as wc:
+                assert isinstance(wc, Project)
+
+                for source in task.sources:
+                    source.implementation.write()
+
                 await self.build_and_test(task, wc)
-            if task.state != TaskState.WIP:
-                return
+                if task.state != TaskState.WIP:
+                    return
+
+                wc.commit(task.id)
 
             task.state = TaskState.REVIEW
 

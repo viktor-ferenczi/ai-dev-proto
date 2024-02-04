@@ -5,11 +5,13 @@ import os
 from typing import Optional
 
 from aidev.common.config import C
-from aidev.common.util import set_slow_callback_duration_threshold
-from aidev.developer.developer import Developer
+from aidev.common.util import set_slow_callback_duration_threshold, join_lines
 from aidev.developer.project import Project
-from aidev.engine.openai_engine import OpenAIEngine
+from aidev.engine.vllm_engine import VllmEngine
 from aidev.sonar.client import SonarClient
+from aidev.workflow.generation_orchestrator import GenerationOrchestrator
+from aidev.workflow.model import Solution, Task, Source
+from aidev.workflow.task_orchestrator import TaskOrchestrator
 
 
 class ArgParser(argparse.ArgumentParser):
@@ -104,18 +106,52 @@ async def main(argv: Optional[list[str]] = None):
 
 
 async def command_fix(project: Project, branch: str, source: str):
-    assert source == 'sonar', source
+    assert source == 'sonar', f'Unknown source: {source}'
+
+    solution = Solution.new(project.project_name, project.project_dir)
+    print(f'Solution: {solution.name}')
+
+    print(f'Analyzing the project with SonarQube')
+    project.analyze()
+
+    print(f'Loading issues from SonarQube')
     sonar = SonarClient(project.project_name)
-    engine = OpenAIEngine()
-    developer = Developer(project, sonar, engine)
-    await developer.fix_issues(branch)
+    for issue in sonar.get_issues():
+        source_path = os.path.join(solution.folder, issue.sourceRelPath)
+        source = Source.from_path(source_path)
+        if issue.textRange is None:
+            description = issue.message
+        else:
+            lines = source.document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
+            description = f'{issue.message}\n\nSource lines:\n```{source.document.doctype.code_block_type}\n{join_lines(lines)}\n```\n'
+        task = Task(
+            id=issue.key,
+            ticket=issue.key,
+            description=description,
+            branch=branch,
+            sources=[source],
+        )
+        solution.tasks[task.id] = task
+        print(f'Task: {task.id}')
+
+    generation_orchestrator = GenerationOrchestrator(solution)
+
+    engine = VllmEngine()
+    generation_orchestrator.register_engine(engine)
+
+    task_orchestrator = TaskOrchestrator(solution)
+
+    print('Working...')
+    await asyncio.wait([
+        asyncio.create_task(generation_orchestrator.run_until_complete()),
+        asyncio.create_task(task_orchestrator.run_until_complete()),
+    ])
+
+    print('Done')
 
 
 async def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
-    engine = OpenAIEngine()
-    # FIXME: Refactor the code to allow for working without sonar
-    developer = Developer(project, None, engine)
-    await developer.create_test_fixtures(branch, keep)
+    raise NotImplementedError()
 
 
 COMMANDS = {
