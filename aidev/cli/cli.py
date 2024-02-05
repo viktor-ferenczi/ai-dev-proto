@@ -2,10 +2,11 @@ import argparse
 import asyncio
 import sys
 import os
+from logging import DEBUG
 from typing import Optional
 
 from aidev.common.config import C
-from aidev.common.util import set_slow_callback_duration_threshold, join_lines
+from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
 from aidev.developer.project import Project
 from aidev.editing.model import Document
 from aidev.engine.vllm_engine import VllmEngine
@@ -147,7 +148,7 @@ async def command_fix(project: Project, branch: str, source: str):
 
     generation_orchestrator = GenerationOrchestrator(solution)
 
-    engine = VllmEngine()
+    engine = VllmEngine(logger=init_logger(loglevel=DEBUG))
     generation_orchestrator.register_engine(engine)
 
     task_orchestrator = TaskOrchestrator(solution)
