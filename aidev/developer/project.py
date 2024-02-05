@@ -1,7 +1,7 @@
 import os
 import re
 from subprocess import check_output, Popen, STDOUT, PIPE
-from typing import Iterable
+from typing import Iterable, Optional, Set
 from lxml import etree
 
 from .mvc import Controller, Model, Method, Coverage, View
@@ -17,7 +17,7 @@ class Project:
 
         self.config_path: str = os.path.join(self.project_dir, 'aidev.toml')
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
-        self.attempts_dir: str = os.path.join(self.aidev_dir, "attempts")
+        self.tasks_dir: str = os.path.join(self.aidev_dir, "tasks")
         self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
 
         self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
@@ -26,7 +26,7 @@ class Project:
         self.sqlite_db_path = os.path.join(self.tests_project_dir, 'FoodShip.Test.db')
 
         os.makedirs(self.aidev_dir, exist_ok=True)
-        os.makedirs(self.attempts_dir, exist_ok=True)
+        os.makedirs(self.tasks_dir, exist_ok=True)
 
         self.has_repository = os.path.isdir(os.path.join(self.project_dir, '.git'))
 
@@ -109,6 +109,17 @@ class Project:
 
         _, output = self.run_command('check staged changes', ['git', 'status'])
         return 'nothing to commit, working tree clean' not in output
+
+    def list_ignored_paths(self) -> Optional[Set[str]]:
+        if not self.has_repository:
+            return None
+
+        returncode, output = self.run_command('list ignored files', ['git', 'ls-files', '--others', '--ignored', '--exclude-standard'])
+        if returncode:
+            return None
+
+        # Returned paths are using slash (/) directory separators
+        return {line.strip() for line in output.split('\n') if line.strip()}
 
     def format_code(self):
         self.must_run_command(f'format code', ["dotnet", "format", '.'])

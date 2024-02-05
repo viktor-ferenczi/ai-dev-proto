@@ -67,12 +67,13 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
+import os.path
 from itertools import pairwise
-from typing import Optional, Iterable, Callable
+from typing import Optional, Iterable
 
 from pydantic import BaseModel
 
-from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks
+from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks, replace_tripple_backquote
 
 
 class DocType(str, SimpleEnum):
@@ -175,7 +176,7 @@ class Document(BaseModel):
     """
 
     path: str
-    """Relative path of the document to the working copy"""
+    """Path of the document relative to the working copy"""
 
     doctype: DocType
     """Document type"""
@@ -192,33 +193,54 @@ class Document(BaseModel):
     def line_count(self) -> int:
         return len(self.lines)
 
-    @classmethod
-    def from_file(cls, path: str) -> 'Document':
-        text = read_text_file(path)
-        return cls.from_text(path, text)
+    @property
+    def text(self) -> str:
+        return join_lines(self.lines)
 
-    @classmethod
-    def from_text(cls, path: str, text: str) -> 'Document':
-        doctype = DocType.from_path(path)
-        lines: list[str] = text.split('\n')
-        return cls(path=path, doctype=doctype, lines=lines)
+    @property
+    def code_block(self) -> str:
+        return f'```{self.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
-    def get_code(self) -> list[str]:
-        lines = [
-            self.id,
-            f'```{self.doctype.code_block_type}'
-        ]
+    @property
+    def code_block_lines(self) -> list[str]:
+        lines = [f'```{self.doctype.code_block_type}']
         lines.extend(self.lines)
         lines.append('```')
         return lines
 
-    def write(self) -> None:
-        """Writes the document
+    @classmethod
+    def from_file(cls, dir_path: str, rel_path: str) -> 'Document':
+        full_path = os.path.join(dir_path, rel_path)
+        text = read_text_file(full_path)
+        return cls.from_text(rel_path, text)
 
+    @classmethod
+    def from_text(cls, rel_path: str, text: str) -> 'Document':
+        rel_path = rel_path.replace('\\', '/').lstrip('/')
+        doctype = DocType.from_path(rel_path)
+        lines: list[str] = text.split('\n')
+        return cls(path=rel_path, doctype=doctype, lines=lines)
+
+    def write(self, dir_path: str) -> None:
+        """Writes the document to disk
+
+        Writes into the working copy folder specified.
         Overwrites the file on disk is it exists.
 
         """
-        write_text_file(self.path, join_lines(self.lines))
+        full_path = os.path.join(dir_path, self.path)
+        write_text_file(full_path, join_lines(self.lines))
+
+    def update(self, dir_path: str) -> None:
+        """Updates the document from disk
+
+        Reads from the working copy folder specified.
+        Overwrites the lines in memory with the file contents from disk.
+
+        """
+        full_path = os.path.join(dir_path, self.path)
+        text = read_text_file(full_path)
+        self.lines[:] = text.split('\n')
 
 
 class Hunk(BaseModel):
@@ -241,6 +263,25 @@ class Hunk(BaseModel):
         """Unique identifier within the conversation LLMs can reproduce verbatim"""
         return f'[HUNK:{self.document.path}#{self.block.begin}:{self.block.end}]'
 
+    @property
+    def lines(self) -> list[str]:
+        return list(self.__iter_code_with_markers())
+
+    @property
+    def text(self) -> str:
+        return join_lines(self.lines)
+
+    @property
+    def code_block(self) -> str:
+        return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
+
+    @property
+    def code_block_lines(self) -> list[str]:
+        lines = [f'```{self.document.doctype.code_block_type}']
+        lines.extend(self.lines)
+        lines.append('```')
+        return lines
+
     @classmethod
     def from_document(cls, document: Document, block: Optional[Block] = None) -> 'Hunk':
         if block is None:
@@ -258,15 +299,6 @@ class Hunk(BaseModel):
 
     def exclude_block(self, block: Block) -> None:
         self.add_marker(block)
-
-    def get_code(self) -> list[str]:
-        lines = [
-            self.id,
-            f'```{self.document.doctype.code_block_type}'
-        ]
-        lines.extend(self.__iter_code_with_markers())
-        lines.append('```')
-        return lines
 
     def __iter_code_with_markers(self) -> Iterable[str]:
         """Yields the text lines to be sent to the LLM for editing,

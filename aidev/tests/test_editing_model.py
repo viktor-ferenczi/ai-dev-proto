@@ -37,15 +37,16 @@ class TestEditingModel(unittest.TestCase):
     def test_document(self):
         doc = self.document
 
+        self.assertEqual(f'[SOURCE:{doc.path}]', doc.id)
+
         self.assertEqual(SHOPPING_CART_CS, join_lines(doc.lines))
 
-        code_block = doc.get_code()
-        print(join_lines(code_block))
+        print(join_lines(doc.code_block))
 
-        self.assertEqual('[SOURCE:ShoppingCart.cs]', code_block[0])
-        self.assertEqual('```cs', code_block[1])
-        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block[2:-1]))
-        self.assertEqual('```', code_block[-1])
+        code_block_lines = doc.code_block_lines
+        self.assertEqual('```cs', code_block_lines[0])
+        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block_lines[1:-1]))
+        self.assertEqual('```', code_block_lines[-1])
 
     def test_empty_changeset(self):
         doc = self.document
@@ -61,7 +62,10 @@ class TestEditingModel(unittest.TestCase):
             edited_doc = patch.apply()
             self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
 
-        check([Hunk.from_document(doc)])
+        hunk = Hunk.from_document(doc)
+        check([hunk])
+
+        self.assertEqual(f'[HUNK:{doc.path}#{hunk.block.begin}:{hunk.block.end}]', hunk.id)
 
         check([Hunk.from_document(doc, Block.from_range(0, 50)),
                Hunk.from_document(doc, Block.from_range(50, doc.line_count))])
@@ -95,11 +99,10 @@ class TestEditingModel(unittest.TestCase):
 
         hunk = Hunk.from_document(doc)
 
-        code_block = hunk.get_code()
-        self.assertEqual(f'[HUNK:ShoppingCart.cs#0:{doc.line_count}]', code_block[0])
-        self.assertEqual('```cs', code_block[1])
-        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block[2:-1]))
-        self.assertEqual('```', code_block[-1])
+        code_block_lines = hunk.code_block_lines
+        self.assertEqual('```cs', code_block_lines[0])
+        self.assertEqual(SHOPPING_CART_CS, join_lines(code_block_lines[1:-1]))
+        self.assertEqual('```', code_block_lines[-1])
 
         hunk.replacement = doc.lines[::-1]
         patch = Patch.from_hunks(doc, [hunk])
@@ -111,11 +114,10 @@ class TestEditingModel(unittest.TestCase):
 
         hunk = Hunk.from_document(doc, Block.from_range(33, 79))
 
-        code_block = hunk.get_code()
-        self.assertEqual(f'[HUNK:ShoppingCart.cs#33:79]', code_block[0])
-        self.assertEqual('```cs', code_block[1])
-        self.assertEqual(join_lines(doc.lines[33:79]), join_lines(code_block[2:-1]))
-        self.assertEqual('```', code_block[-1])
+        code_block_lines = hunk.code_block_lines
+        self.assertEqual('```cs', code_block_lines[0])
+        self.assertEqual(join_lines(doc.lines[33:79]), join_lines(code_block_lines[1:-1]))
+        self.assertEqual('```', code_block_lines[-1])
 
         hunk.replacement = '''\
         public bool AddToCart(Food food, int amount)
@@ -151,9 +153,8 @@ class TestEditingModel(unittest.TestCase):
         hunk.exclude_block(Block.from_range(62, 73))
 
         found: Set[str] = set()
-        code_block = hunk.get_code()
-        print(join_lines(code_block))
-        for line in code_block:
+        print(join_lines(hunk.code_block))
+        for line in hunk.code_block_lines:
             for placholder in hunk.markers:
                 marker = placholder.format_marker(doc.doctype)
                 if marker in line:
@@ -207,7 +208,7 @@ class TestEditingModel(unittest.TestCase):
         patch = Patch.from_completion(doc, ADD_TO_CARD_TODO)
 
         for hunk in patch.hunks:
-            print(join_lines(hunk.get_code()))
+            print(hunk.code_block)
             print()
 
         self.assertEqual(4, len(patch.hunks))
@@ -227,4 +228,4 @@ class TestEditingModel(unittest.TestCase):
         print('-' * 40)
         print('Merged')
         print('-' * 40)
-        print(join_lines(hunk.get_code()))
+        print(hunk.code_block)

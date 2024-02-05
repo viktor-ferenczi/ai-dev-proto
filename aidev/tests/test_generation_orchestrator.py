@@ -7,6 +7,8 @@ from aidev.engine.vllm_engine import VllmEngine
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
 from aidev.workflow.model import Solution, Task, Generation, TaskState, GenerationState, Source
 
+SCRIPT_DIR = os.path.dirname(__file__)
+
 
 class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
 
@@ -28,7 +30,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             return generation
 
         def create_source():
-            source = Source.from_path(__file__)
+            source = Source.from_file(SCRIPT_DIR, __file__)
             source.relevant_generation = create_generation()
             source.dependency_generations = [create_generation(), create_generation()]
             source.patch_generation = create_generation()
@@ -40,7 +42,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             description='description',
             branch='branch',
             state=TaskState.WIP,
-            sources_generation=create_generation(),
+            source_selection_generations=[create_generation()],
             sources=[create_source(), create_source()],
         )
         solution.tasks[task.id] = task

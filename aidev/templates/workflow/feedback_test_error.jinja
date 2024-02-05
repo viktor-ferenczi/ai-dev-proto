@@ -1,0 +1,20 @@
+{% include 'general_rules.jinja' with context %}
+
+## TASK description
+
+{{ task.description }}
+
+## Instructions
+
+Your job is to provide a very concise summary of the most important part of the above error
+considering the task which was implemented. Write up to 5 sentences, not more. Strive for
+giving an insight into why the tests failed as a constructive feedback for anyone attempting
+to implement the task again. It should help the next implementer in avoiding the same mistake.
+
+After implementing the above TASK the solution failed to test with the following error:
+
+```
+{{ error }}
+```
+
+Now take a deep breath and provide the feedback.

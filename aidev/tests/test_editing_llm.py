@@ -36,12 +36,12 @@ Please ALWAYS honor ALL of these general rules:
 
 Understand and remember this source code:
 
-{join_lines(doc.get_code())}
+{doc.code_block}
 
 The source code contains this description of an issue to fix 
 or a suggested refactoring, which will be referred later as TASK:
 
-{join_lines(hunk.get_code())}
+{hunk.code_block}
 
 Your job is to identify the part of code relevant for the TASK.
 These are the code lines somebody needs to understand to be able
@@ -79,8 +79,8 @@ Take a deep breath and write the code blocks:
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        pattern = ''.join(f'({escape(line)}\n)?' for line in doc.lines)
-        pattern = f'```{doc.doctype.code_block_type}\n{pattern}\n```\n'
+        pattern = ''.join(rf'({escape(line)}\n)?' for line in doc.lines)
+        pattern = rf'```{doc.doctype.code_block_type}\n{pattern}\n```\n'
         constraint = Constraint.from_regex(pattern)
 
         params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)
@@ -112,14 +112,14 @@ Please ALWAYS honor ALL of these general rules:
 This description of an issue to fix or a suggested refactoring,
 which will be referred later as TASK:
 
-{join_lines(todo.get_code())}
+{todo.code_block}
 
 Your job is to implement code changes to complete the above TASK.
 The code is part of a larger project. The relevant code lines have
 already been extracted for you. You need to make changes, removals
 and additions as needed only to this code:
 
-{join_lines(hunk.get_code())}
+{hunk.code_block}
 
 Please ALWAYS honor ALL of these rules specific to your current job:
 - Always write clean, human readable code.
@@ -142,10 +142,10 @@ single code block.
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        pattern = f'```{doc.doctype.code_block_type}\n(.*?\n)+```\n'
+        pattern = rf'```{doc.doctype.code_block_type}\n(.*?\n)+```\n'
         constraint = Constraint.from_regex(pattern)
 
-        params = GenerationParams(n=16, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)
+        params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)
 
         completions = await engine.generate(system, instruction, params)
 

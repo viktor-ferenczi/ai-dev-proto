@@ -2,14 +2,18 @@ import argparse
 import asyncio
 import sys
 import os
+from logging import DEBUG
 from typing import Optional
 
 from aidev.common.config import C
-from aidev.common.util import set_slow_callback_duration_threshold
-from aidev.developer.developer import Developer
+from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
 from aidev.developer.project import Project
-from aidev.engine.openai_engine import OpenAIEngine
+from aidev.editing.model import Document
+from aidev.engine.vllm_engine import VllmEngine
 from aidev.sonar.client import SonarClient
+from aidev.workflow.generation_orchestrator import GenerationOrchestrator
+from aidev.workflow.model import Solution, Task
+from aidev.workflow.task_orchestrator import TaskOrchestrator
 
 
 class ArgParser(argparse.ArgumentParser):
@@ -89,6 +93,9 @@ async def main(argv: Optional[list[str]] = None):
         print(f'The directory "{project_dir}" is not a Git working copy.', file=sys.stderr)
         sys.exit(1)
 
+    if args.verbose:
+        C.VERBOSE = True
+
     assert project_name, 'Empty project name'
     assert branch, 'Empty branch name'
 
@@ -104,18 +111,62 @@ async def main(argv: Optional[list[str]] = None):
 
 
 async def command_fix(project: Project, branch: str, source: str):
-    assert source == 'sonar', source
+    assert source == 'sonar', f'Unknown source: {source}'
+
+    solution = Solution.new(project.project_name, project.project_dir)
+    print(f'Solution: {solution.name}')
+
     sonar = SonarClient(project.project_name)
-    engine = OpenAIEngine()
-    developer = Developer(project, sonar, engine)
-    await developer.fix_issues(branch)
+    if not sonar.get_issues():
+        print(f'Analyzing the project with SonarQube')
+        project.analyze()
+
+    print(f'Loading issues from SonarQube')
+    for issue in sonar.get_issues():
+
+        if issue.textRange is None:
+            description = issue.message
+        else:
+            document = Document.from_file(solution.folder, issue.sourceRelPath)
+            code_block_type = document.doctype.code_block_type
+            code_lines = document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
+            description = (
+                f'{issue.message}\n\n'
+                f'This issue was reported for this source file: `{issue.sourceRelPath}`\n\n'
+                f'Within that source file for these lines of code:\n\n'
+                f'```{code_block_type}\n{join_lines(code_lines)}\n```\n'
+            )
+
+        task = Task(
+            id=issue.key,
+            ticket=issue.key,
+            description=description,
+            branch=branch,
+        )
+
+        solution.tasks[task.id] = task
+
+    print(f'Picked up {len(solution.tasks)} issues')
+
+    generation_orchestrator = GenerationOrchestrator(solution)
+
+    logger = init_logger(loglevel=DEBUG) if C.VERBOSE else None
+    engine = VllmEngine(logger=logger)
+    generation_orchestrator.register_engine(engine)
+
+    task_orchestrator = TaskOrchestrator(solution)
+
+    print('Working...')
+    await asyncio.wait([
+        asyncio.create_task(generation_orchestrator.run_until_complete()),
+        asyncio.create_task(task_orchestrator.run_until_complete()),
+    ])
+
+    print('Done')
 
 
 async def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
-    engine = OpenAIEngine()
-    # FIXME: Refactor the code to allow for working without sonar
-    developer = Developer(project, None, engine)
-    await developer.create_test_fixtures(branch, keep)
+    raise NotImplementedError()
 
 
 COMMANDS = {

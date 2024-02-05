@@ -50,15 +50,15 @@ class TaskOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         source = task.sources[0]
 
         print('RELEVANT CODE:')
-        for line in source.relevant.get_code():
+        for line in source.relevant.code_block_lines:
             print(line)
         print()
 
         print('IMPLEMENTATION:')
         implementation = source.implementation
-        for line in implementation.get_code():
+        for line in implementation.code_block_lines:
             print(line)
         print()
 
-        self.assertEqual(9, len(implementation.get_code()))
+        self.assertEqual(8, len(implementation.code_block_lines))
         self.assertTrue(any('WriteLine' in line for line in implementation.lines))

@@ -1,11 +1,11 @@
 import asyncio
 import os
 from traceback import format_exc
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Callable
 from pydantic import BaseModel
 
 from ..common.config import C
-from ..common.util import SimpleEnum
+from ..common.util import SimpleEnum, join_lines
 from ..editing.model import Patch, Document, Hunk
 from ..engine.engine import Engine
 from ..engine.params import GenerationParams
@@ -84,6 +84,7 @@ class SourceState(str, SimpleEnum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    SKIP = "SKIP"
 
 
 class Dependency(BaseModel):
@@ -109,7 +110,7 @@ class Source(BaseModel):
     """The original source file contents"""
 
     relevant_generation: Optional[Generation] = None
-    """Request to find the relevant parts of code"""
+    """Text generation to find the relevant part of the source code"""
 
     relevant: Optional[Hunk] = None
     """Relevant part of the code"""
@@ -121,7 +122,7 @@ class Source(BaseModel):
     """Dependencies retrieved from the code map"""
 
     patch_generation: Optional[Generation] = None
-    """Request to actually implement the change"""
+    """Text generation to actually implement the change"""
 
     patch: Optional[Patch] = None
     """Hunks from the LLM generated implementation completion"""
@@ -133,10 +134,10 @@ class Source(BaseModel):
     """Error message in FAILED state"""
 
     @classmethod
-    def from_path(cls, path: str):
+    def from_file(cls, dir_path: str, rel_path: str):
         return cls(
             state=SourceState.PENDING,
-            document=Document.from_file(path),
+            document=Document.from_file(dir_path, rel_path),
         )
 
     def iter_generations(self) -> Iterable[Generation]:
@@ -197,17 +198,23 @@ class Task(BaseModel):
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
-    sources_generation: Optional[Generation] = None
-    """Request to find the relevant source code files"""
+    source_selection_generations: Optional[list[Generation]] = None
+    """Text generation to select the source code files relevant for the task"""
 
     sources: Optional[list[Source]] = None
     """Source files that need to be modified, does not include dependencies from the code map"""
 
+    feedback_generation: Optional[Generation] = None
+    """Text generation to evaluate the build or test results or errors"""
+
+    feedback: Optional[Feedback] = None
+    """Feedback after a failed build or test, appended to former_feedbacks on cloning the task for a retry"""
+
+    previous_feedbacks: Optional[list[Feedback]] = None
+    """Feedbacks provided on previous failed attempts (redundant, prevents recursive queries)"""
+
     pr: Optional[str] = None
     """Reference of the PR to review the changes committed to the branch"""
-
-    feedbacks: Optional[list[Feedback]] = None
-    """Extended by additional items on cloning the task for retry"""
 
     error: Optional[str] = None
     """Error message in FAILED state"""
@@ -220,8 +227,11 @@ class Task(BaseModel):
         if self.state != 'WIP':
             return
 
-        if self.sources_generation is not None:
-            yield self.sources_generation
+        if self.source_selection_generations is not None:
+            yield from self.source_selection_generations
+
+        if self.feedback_generation is not None:
+            yield self.feedback_generation
 
         if self.sources is not None:
             for source in self.sources:
@@ -262,4 +272,4 @@ class Solution(BaseModel):
             for filename in filenames:
                 ext = filename.rsplit('.', 1)[-1].lower()
                 if ext in source_extensions:
-                    yield os.path.join(dirpath, filename)[relative_path_start:]
+                    yield os.path.join(dirpath, filename)[relative_path_start:].replace('\\', '/')

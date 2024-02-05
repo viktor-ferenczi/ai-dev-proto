@@ -7,6 +7,9 @@ AIDEV_PACKAGE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..
 
 
 class Config:
+    # Common flags
+    VERBOSE = False
+
     # Project (solution)
     PROJECT_DIR: str = os.getenv('AIDEV_PROJECT_DIR', '')
     PROJECT_NAME: str = os.getenv('AIDEV_PROJECT_DIR', '')
@@ -35,7 +38,7 @@ class Config:
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Task orchestration
-    MAX_PARALLEL_TASKS: int = 16
+    MAX_PARALLEL_TASKS: int = 2
 
     # Markdown code block type by file extension
     DOCTYPE_BY_EXTENSION: Dict[str, str] = {
@@ -79,6 +82,7 @@ class Config:
     TEMPLATES_DIR = os.path.join(AIDEV_PACKAGE_DIR, 'templates')
     PROMPT_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'prompt')
     WORKFLOW_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'workflow')
+    MARKDOWN_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'markdown')
 
     # Prompt templates for each model
     PROMPT_TEMPLATES = {
