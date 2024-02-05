@@ -93,6 +93,9 @@ async def main(argv: Optional[list[str]] = None):
         print(f'The directory "{project_dir}" is not a Git working copy.', file=sys.stderr)
         sys.exit(1)
 
+    if args.verbose:
+        C.VERBOSE = True
+
     assert project_name, 'Empty project name'
     assert branch, 'Empty branch name'
 
@@ -148,7 +151,8 @@ async def command_fix(project: Project, branch: str, source: str):
 
     generation_orchestrator = GenerationOrchestrator(solution)
 
-    engine = VllmEngine(logger=init_logger(loglevel=DEBUG))
+    logger = init_logger(loglevel=DEBUG) if C.VERBOSE else None
+    engine = VllmEngine(logger=logger)
     generation_orchestrator.register_engine(engine)
 
     task_orchestrator = TaskOrchestrator(solution)

@@ -7,6 +7,9 @@ AIDEV_PACKAGE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..
 
 
 class Config:
+    # Common flags
+    VERBOSE = False
+
     # Project (solution)
     PROJECT_DIR: str = os.getenv('AIDEV_PROJECT_DIR', '')
     PROJECT_NAME: str = os.getenv('AIDEV_PROJECT_DIR', '')
