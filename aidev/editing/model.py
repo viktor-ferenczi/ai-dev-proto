@@ -67,6 +67,7 @@ but never modified in place, nor any information removed from them until being d
 
 """
 import bisect
+import os.path
 from itertools import pairwise
 from typing import Optional, Iterable
 
@@ -175,7 +176,7 @@ class Document(BaseModel):
     """
 
     path: str
-    """Relative path of the document to the working copy"""
+    """Path of the document relative to the working copy"""
 
     doctype: DocType
     """Document type"""
@@ -208,23 +209,38 @@ class Document(BaseModel):
         return lines
 
     @classmethod
-    def from_file(cls, path: str) -> 'Document':
-        text = read_text_file(path)
-        return cls.from_text(path, text)
+    def from_file(cls, dir_path: str, rel_path: str) -> 'Document':
+        full_path = os.path.join(dir_path, rel_path)
+        text = read_text_file(full_path)
+        return cls.from_text(rel_path, text)
 
     @classmethod
-    def from_text(cls, path: str, text: str) -> 'Document':
-        doctype = DocType.from_path(path)
+    def from_text(cls, rel_path: str, text: str) -> 'Document':
+        rel_path = rel_path.replace('\\', '/').lstrip('/')
+        doctype = DocType.from_path(rel_path)
         lines: list[str] = text.split('\n')
-        return cls(path=path, doctype=doctype, lines=lines)
+        return cls(path=rel_path, doctype=doctype, lines=lines)
 
-    def write(self) -> None:
-        """Writes the document
+    def write(self, dir_path: str) -> None:
+        """Writes the document to disk
 
+        Writes into the working copy folder specified.
         Overwrites the file on disk is it exists.
 
         """
-        write_text_file(self.path, join_lines(self.lines))
+        full_path = os.path.join(dir_path, self.path)
+        write_text_file(full_path, join_lines(self.lines))
+
+    def update(self, dir_path: str) -> None:
+        """Updates the document from disk
+
+        Reads from the working copy folder specified.
+        Overwrites the lines in memory with the file contents from disk.
+
+        """
+        full_path = os.path.join(dir_path, self.path)
+        text = read_text_file(full_path)
+        self.lines[:] = text.split('\n')
 
 
 class Hunk(BaseModel):

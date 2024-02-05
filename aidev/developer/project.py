@@ -1,7 +1,7 @@
 import os
 import re
 from subprocess import check_output, Popen, STDOUT, PIPE
-from typing import Iterable
+from typing import Iterable, Optional, Set
 from lxml import etree
 
 from .mvc import Controller, Model, Method, Coverage, View
@@ -109,6 +109,17 @@ class Project:
 
         _, output = self.run_command('check staged changes', ['git', 'status'])
         return 'nothing to commit, working tree clean' not in output
+
+    def list_ignored_paths(self) -> Optional[Set[str]]:
+        if not self.has_repository:
+            return None
+
+        returncode, output = self.run_command('list ignored files', ['git', 'ls-files', '--others', '--ignored', '--exclude-standard'])
+        if returncode:
+            return None
+
+        # Returned paths are using slash (/) directory separators
+        return {line.strip() for line in output.split('\n') if line.strip()}
 
     def format_code(self):
         self.must_run_command(f'format code', ["dotnet", "format", '.'])

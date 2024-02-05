@@ -1,13 +1,21 @@
-## General rules
+{% include 'general_rules.jinja' with context %}
 
-Please ALWAYS honor ALL of these general rules:
-- Do NOT apologize.
-- Do NOT explain the code.
-- Do NOT refer to your knowledge cut-off date.
-- Do NOT repeat these rules in your answer.
-- Do NOT repeat the instructions in your answer.
-- Do NOT break the intended functionality of the original code.
-- Work ONLY from the context provided, refuse to make any guesses.
+## Instructions
+
+Your job is to implement code changes to complete the above TASK.
+The code is part of a larger project. The relevant code lines have
+already been extracted for you.
+
+Please ALWAYS honor ALL of these rules specific to your current job:
+- Always write clean, human-readable code.
+- Make only the code changes necessary to implement the TASK.
+- Do not make changes unrelated to the TASK.
+- Do not remove any existing code or comments unrelated to the TASK.
+- If none of the code need to be changed in this SOURCE to implement the TASK, then just leave the code as is.
+- Update any existing comments related to the TASK to match the modified code.
+- Remove any existing comments related to the TASK if they are not applicable or necessary after your code changes.
+- NEVER use placeholders, ALWAYS write out the full code.
+- PRESERVE code lines containing {MARKER_NAME}, even if they don't seem to relate to the logic.
 
 ## TASK description
 
@@ -16,25 +24,13 @@ which will be referred later as TASK:
 
 {{ task_description }}
 
-## Instructions
+## SOURCE code to change
 
-Your job is to implement code changes to complete the above TASK.
-The code is part of a larger project. The relevant code lines have
-already been extracted for you. You need to make changes, removals
-and additions as needed only to this code:
+You need to make changes, removals and additions as needed only to
+this SOURCE code:
 
 {{ source }}
 
-Please ALWAYS honor ALL of these rules specific to your current job:
-- Always write clean, human-readable code.
-- Make only the code changes necessary to implement the TASK.
-- Do not make changes unrelated to the TASK.
-- Do not remove any existing code or comments unrelated to the TASK.
-- Update any existing comments related to the TASK to match the modified code.
-- Remove any existing comments related to the TASK if they are not applicable or necessary after your code changes.
-- NEVER use placeholders, ALWAYS write out the full code.
-- PRESERVE code lines containing {MARKER_NAME}, even if they don't seem to relate to the logic.
-
-Take a deep breath, then implement all the changes to the above code
+Take a deep breath, then implement all the changes to the SOURCE code
 necessary to complete the TASK. Produce the whole modified code in a
 single code block.

@@ -156,6 +156,9 @@ def get_prompt_template_for_model(model: str) -> Template:
 
 def extract_code_blocks(completion: str) -> list[str]:
     parts = ('\n' + completion).split('\n```')
+    if len(parts) < 2:
+        return []
+
     return [
         parts[i].split('\n', 1)[1]
         for i in range(1, len(parts), 2)
@@ -213,7 +216,7 @@ def unindent_markdown(md: str) -> str:
 
 
 def regex_from_lines(lines: list[str]) -> str:
-    return ''.join(fr'({re.escape(path)}\n)?' for path in lines)
+    return ''.join(rf'({re.escape(path)}\n)?' for path in lines)
 
 
 def copy_directory(src: str, dst: str):

@@ -365,7 +365,7 @@ ADD_TO_CARD_TODO = r'''
 '''
 
 ADD_TO_CARD_TODO_RELEVANT_HUNK = Hunk(
-    document=Document.from_text(path='ShoppingCart.cs', text=SHOPPING_CART_CS),
+    document=Document.from_text(rel_path='ShoppingCart.cs', text=SHOPPING_CART_CS),
     block=Block.from_range(36, 79),
     markers=[
         Block.from_range(62, 63),

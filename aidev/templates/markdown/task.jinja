@@ -33,16 +33,23 @@
     {{ task.description }}
 
 </details>
-{% if task.sources_generation %}
+
+
+{% if task.source_selection_generations %}
 
     ---
 
     <details>
-        <summary>Source selection</summary>
-        {% set generation = task.sources_generation %}
-        {% include 'generation.jinja' with context %}
+        <summary>Source selection generations</summary>
+        {% for generation in task.source_selection_generations %}
+            <details>
+                <summary>Generation {{ loop.index }}</summary>
+                {% include 'generation.jinja' with context %}
+            </details>
+        {% endfor %}
     </details>
 {% endif %}
+
 
 {% if task.sources %}
     {% for source in task.sources %}
@@ -57,13 +64,37 @@
 {% endif %}
 
 
+{% if task.feedback_generation %}
+
+    ---
+
+    <details>
+        <summary>Feedback generation</summary>
+        {% set generation = task.feedback_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+{% endif %}
+
+
+{% if task.feedback %}
+
+    ---
+
+    {% set feedback = task.feedback %}
+    <details>
+        <summary>Feedback on {{ feedback.critic }} error</summary>
+        {% include 'feedback.jinja' with context %}
+    </details>
+{% endif %}
+
+
 {% if task.feedbacks %}
 
     ---
 
     <details>
-        <summary>Feedbacks</summary>
-        {% for feedback in task.feedbacks %}
+        <summary>Previous feedbacks</summary>
+        {% for feedback in task.previous_feedbacks %}
             {% include 'feedback.jinja' with context %}
         {% endfor %}
     </details>

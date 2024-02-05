@@ -127,13 +127,12 @@ async def command_fix(project: Project, branch: str, source: str):
         if issue.textRange is None:
             description = issue.message
         else:
-            source_path = os.path.join(solution.folder, issue.sourceRelPath)
-            document = Document.from_file(source_path)
+            document = Document.from_file(solution.folder, issue.sourceRelPath)
             code_block_type = document.doctype.code_block_type
             code_lines = document.lines[issue.textRange.startLine - 1:issue.textRange.endLine]
             description = (
                 f'{issue.message}\n\n'
-                'This issue was reported for this source file: `{issue.sourceRelPath}`\n\n'
+                f'This issue was reported for this source file: `{issue.sourceRelPath}`\n\n'
                 f'Within that source file for these lines of code:\n\n'
                 f'```{code_block_type}\n{join_lines(code_lines)}\n```\n'
             )

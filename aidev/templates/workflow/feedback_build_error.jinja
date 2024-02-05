@@ -1,0 +1,23 @@
+{% include 'general_rules.jinja' with context %}
+
+## Instructions
+
+Your job is to provide a very concise summary of the most important part of the above error
+considering the task which was implemented. Write up to 5 sentences, not more. Strive for
+giving an insight into why the build failed as a constructive feedback for anyone attempting
+to implement the task again. It should help the next implementer in avoiding the same mistake.
+Concentrate only on the build errors and ignore the warnings and other non-critical content.
+
+## TASK description
+
+{{ task.description }}
+
+## Build ERROR
+
+After implementing the above TASK the solution failed to build with the following ERROR:
+
+```
+{{ error }}
+```
+
+Now take a deep breath and provide the feedback.
