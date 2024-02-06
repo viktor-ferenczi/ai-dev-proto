@@ -35,13 +35,13 @@
 </details>
 
 
-{% if task.source_selection_generations %}
+{% if task.planning_generations %}
 
     ---
 
     <details>
-        <summary>Source selection generations</summary>
-        {% for generation in task.source_selection_generations %}
+        <summary>Planning generations</summary>
+        {% for generation in task.planning_generations %}
             <details>
                 <summary>Generation {{ loop.index }}</summary>
                 {% include 'generation.jinja' with context %}

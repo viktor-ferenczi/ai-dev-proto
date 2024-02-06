@@ -61,7 +61,7 @@ class TaskOrchestrator:
 
     def pick_up_running_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
-            if task.state == TaskState.WIP:
+            if task.is_wip:
                 if task.id not in self.wip_tasks:
                     self.wip_tasks[task.id] = task
                     pool.run(self.process_task(task))
@@ -71,7 +71,7 @@ class TaskOrchestrator:
     def start_new_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
             if task.state == TaskState.NEW:
-                task.state = TaskState.WIP
+                task.state = TaskState.PLANNING
                 self.wip_tasks[task.id] = task
                 pool.run(self.process_task(task))
                 if len(self.wip_tasks) == self.max_parallel_tasks:
@@ -83,7 +83,7 @@ class TaskOrchestrator:
 
             if task.sources is None:
                 await self.find_relevant_sources(task)
-                if task.state != TaskState.WIP:
+                if not task.is_wip:
                     return
 
             self.dump_task(task)
@@ -260,12 +260,12 @@ class TaskOrchestrator:
     async def process_source(self, task: Task, source: Source):
         if source.relevant is None:
             await self.find_relevant_code(task, source)
-            if source.state != SourceState.PENDING or task.state != TaskState.WIP:
+            if source.state != SourceState.PENDING or task.is_wip:
                 return
 
         if source.implementation is None:
             await self.implement_task(task, source)
-            if source.state != SourceState.PENDING or task.state != TaskState.WIP:
+            if source.state != SourceState.PENDING or task.is_wip:
                 return
 
         source.state = SourceState.COMPLETED

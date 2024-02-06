@@ -158,11 +158,20 @@ class Feedback(BaseModel):
 class TaskState(str, SimpleEnum):
     """Possible states of a Task"""
     NEW = "NEW"
-    WIP = "WIP"
+    PLANNING = "PLANNING"
+    CODING = "CODING"
+    EVALUATING = "EVALUATING"
     REVIEW = "REVIEW"
     MERGED = "MERGED"
     REJECTED = "REJECTED"
     FAILED = "FAILED"
+
+
+TASK_WIP_STATES = (
+    TaskState.PLANNING,
+    TaskState.CODING,
+    TaskState.EVALUATING,
+)
 
 
 class Task(BaseModel):
@@ -189,11 +198,11 @@ class Task(BaseModel):
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
-    sources: Optional[list[Source]] = None
-    """Source files that need to be modified, extended during planning"""
-
     planning_generations: Optional[list[Generation]] = None
     """Text generations used for planning the implementation"""
+
+    sources: Optional[list[Source]] = None
+    """Source files that need to be modified, extended during planning"""
 
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""
@@ -211,15 +220,19 @@ class Task(BaseModel):
     """Error message in FAILED state"""
 
     @property
+    def is_wip(self) -> bool:
+        return self.state in TASK_WIP_STATES
+
+    @property
     def is_remaining(self) -> bool:
-        return self.state in (TaskState.NEW, TaskState.WIP)
+        return self.state == TaskState.NEW or self.is_wip
 
     def iter_generations(self) -> Iterable[Generation]:
         if self.state != 'WIP':
             return
 
-        if self.source_selection_generations is not None:
-            yield from self.source_selection_generations
+        if self.planning_generations is not None:
+            yield from self.planning_generations
 
         if self.feedback_generation is not None:
             yield self.feedback_generation
