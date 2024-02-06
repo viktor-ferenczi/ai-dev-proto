@@ -8,6 +8,7 @@ openai
 lxml
 vllm-client
 jinja2
+tree-sitter
 
 # Because of the tokenizers
 transformers
