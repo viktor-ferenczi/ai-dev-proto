@@ -135,7 +135,7 @@ class Source(BaseModel):
         )
 
     def iter_generations(self) -> Iterable[Generation]:
-        if self.state != 'PENDING':
+        if self.state != SourceState.PENDING:
             return
 
         if self.relevant_generation is not None:
@@ -228,7 +228,7 @@ class Task(BaseModel):
         return self.state == TaskState.NEW or self.is_wip
 
     def iter_generations(self) -> Iterable[Generation]:
-        if self.state != 'WIP':
+        if not self.is_wip:
             return
 
         if self.planning_generations is not None:

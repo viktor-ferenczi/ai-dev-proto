@@ -61,21 +61,29 @@ class TaskOrchestrator:
 
     def pick_up_running_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
-            if task.is_wip:
-                if task.id not in self.wip_tasks:
-                    self.wip_tasks[task.id] = task
-                    pool.run(self.process_task(task))
-                    if len(self.wip_tasks) == self.max_parallel_tasks:
-                        return
+            if not task.is_wip:
+                continue
+
+            if task.id in self.wip_tasks:
+                continue
+
+            self.wip_tasks[task.id] = task
+            pool.run(self.process_task(task))
+
+            if len(self.wip_tasks) == self.max_parallel_tasks:
+                break
 
     def start_new_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
-            if task.state == TaskState.NEW:
-                task.state = TaskState.PLANNING
-                self.wip_tasks[task.id] = task
-                pool.run(self.process_task(task))
-                if len(self.wip_tasks) == self.max_parallel_tasks:
-                    return
+            if task.state != TaskState.NEW:
+                continue
+
+            task.state = TaskState.PLANNING
+            self.wip_tasks[task.id] = task
+            pool.run(self.process_task(task))
+
+            if len(self.wip_tasks) == self.max_parallel_tasks:
+                break
 
     async def process_task(self, task: Task):
         try:

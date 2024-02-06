@@ -24,7 +24,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
                     Write a C# 10 console program to print the integers from 1 to 10, each one on a separate line.
                     Write only the code and nothing else. Do not explain, do not add source code comments.
                 ''',
-                GenerationParams(max_tokens=300, temperature=0.1)
+                GenerationParams(max_tokens=150, temperature=0.2)
             )
             generations.append(generation)
             return generation
@@ -55,13 +55,16 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         orchestrator.register_engine(engine)
 
         async def complete_task_when_generated():
-            for _ in range(600):
+            for _ in range(60):
+
                 if any(g.state == GenerationState.FAILED for g in generations):
                     raise RuntimeError('One or more generations failed')
+
                 if all(g.state == GenerationState.COMPLETED for g in generations):
                     task.state = TaskState.REVIEW
                     break
-                await asyncio.sleep(0.1)
+
+                await asyncio.sleep(0.5)
 
         await asyncio.wait([
             asyncio.create_task(orchestrator.run_until_complete()),
