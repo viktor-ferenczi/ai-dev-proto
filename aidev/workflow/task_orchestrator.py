@@ -7,7 +7,7 @@ from typing import AsyncContextManager, Set
 from .model import Solution, Task, TaskState, Source, Generation, GenerationState, SourceState, Feedback
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
-from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote
+from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template
 from ..developer.project import Project
 from ..editing.model import Patch
 from ..engine.params import GenerationParams, Constraint
@@ -15,6 +15,9 @@ from ..engine.params import GenerationParams, Constraint
 SYSTEM_CODING_ASSISTANT = '''\
 You are a helpful coding assistant experienced in C#, .NET Core., HTML, JavaScript and Python.
 '''
+
+SCRIPT_DIR = os.path.normpath(os.path.dirname(__file__))
+DOCS_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, 'docs'))
 
 
 class TaskOrchestrator:
@@ -173,10 +176,13 @@ class TaskOrchestrator:
 
     def dump_task(self, task: Task) -> None:
         dir_path = os.path.join(self.solution.folder, '.aidev', 'tasks')
-        path = os.path.join(dir_path, f'{task.id}.json')
         os.makedirs(dir_path, exist_ok=True)
-        with open(path, 'wt', encoding='utf-8-sig') as f:
-            f.write(task.model_dump_json(indent=2))
+        json_path = os.path.join(dir_path, f'{task.id}.json')
+        write_text_file(json_path, task.model_dump_json(indent=2))
+
+        os.makedirs(DOCS_DIR, exist_ok=True)
+        md_path = os.path.join(DOCS_DIR, f'{task.id}.json')
+        write_text_file(md_path, render_markdown_template('task', task=task))
 
     async def find_relevant_sources(self, task: Task):
         async with self.working_copy(task) as wc:

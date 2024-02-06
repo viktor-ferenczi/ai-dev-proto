@@ -1,0 +1,7 @@
+site_name: Tasks
+site_url: http://127.0.0.1:8000/
+theme: readthedocs
+nav:
+  - Home: index.md
+  - About: about.md
+  
