@@ -257,11 +257,6 @@ class TaskOrchestrator:
             if source.state != SourceState.PENDING or task.state != TaskState.WIP:
                 return
 
-        if source.dependencies is None:
-            await self.find_dependencies(task, source)
-            if source.state != SourceState.PENDING or task.state != TaskState.WIP:
-                return
-
         if source.implementation is None:
             await self.implement_task(task, source)
             if source.state != SourceState.PENDING or task.state != TaskState.WIP:
@@ -303,10 +298,6 @@ class TaskOrchestrator:
 
         patch.merge_hunks()
         source.relevant = patch.hunks[0]
-
-    async def find_dependencies(self, task: Task, source: Source):
-        # TODO
-        source.dependencies = []
 
     async def implement_task(self, task: Task, source: Source):
         instruction = render_workflow_template(

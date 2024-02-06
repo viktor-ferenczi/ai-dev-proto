@@ -23,26 +23,6 @@
 {% endif %}
 
 
-{% if source.dependency_generations %}
-    <details>
-        <summary>Dependency generations</summary>
-
-        {% for dependency_generation in source.dependency_generations %}
-
-            <details>
-                <summary>Generation {{ loop.index }}</summary>
-
-                {% set generation = dependency_generation %}
-                {% include 'generation.jinja' with context %}
-
-            </details>
-
-        {% endfor %}
-
-    </details>
-{% endif %}
-
-
 {% if source.patch_generation %}
 <details>
     <summary>Patch generation</summary>

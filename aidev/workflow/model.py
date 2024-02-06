@@ -1,11 +1,11 @@
 import asyncio
 import os
 from traceback import format_exc
-from typing import Optional, Iterable, Callable
+from typing import Optional, Iterable
 from pydantic import BaseModel
 
 from ..common.config import C
-from ..common.util import SimpleEnum, join_lines
+from ..common.util import SimpleEnum
 from ..editing.model import Patch, Document, Hunk
 from ..engine.engine import Engine
 from ..engine.params import GenerationParams
@@ -115,12 +115,6 @@ class Source(BaseModel):
     relevant: Optional[Hunk] = None
     """Relevant part of the code"""
 
-    dependency_generations: Optional[list[Generation]] = None
-    """Iterative requests to find missing dependencies"""
-
-    dependencies: Optional[list[Dependency]] = None
-    """Dependencies retrieved from the code map"""
-
     patch_generation: Optional[Generation] = None
     """Text generation to actually implement the change"""
 
@@ -146,9 +140,6 @@ class Source(BaseModel):
 
         if self.relevant_generation is not None:
             yield self.relevant_generation
-
-        if self.dependency_generations is not None:
-            yield from self.dependency_generations
 
         if self.patch_generation is not None:
             yield self.patch_generation
@@ -198,11 +189,11 @@ class Task(BaseModel):
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
-    source_selection_generations: Optional[list[Generation]] = None
-    """Text generation to select the source code files relevant for the task"""
-
     sources: Optional[list[Source]] = None
-    """Source files that need to be modified, does not include dependencies from the code map"""
+    """Source files that need to be modified, extended during planning"""
+
+    planning_generations: Optional[list[Generation]] = None
+    """Text generations used for planning the implementation"""
 
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""

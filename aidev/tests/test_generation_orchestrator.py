@@ -32,7 +32,6 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         def create_source():
             source = Source.from_file(SCRIPT_DIR, __file__)
             source.relevant_generation = create_generation()
-            source.dependency_generations = [create_generation(), create_generation()]
             source.patch_generation = create_generation()
             return source
 
@@ -47,7 +46,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         )
         solution.tasks[task.id] = task
 
-        self.assertEqual(9, len(generations))
+        self.assertEqual(5, len(generations))
 
         orchestrator = GenerationOrchestrator(solution)
 
