@@ -64,7 +64,6 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        self.state = GenerationState.GENERATING
         try:
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
@@ -160,7 +159,7 @@ class TaskState(str, SimpleEnum):
     NEW = "NEW"
     PLANNING = "PLANNING"
     CODING = "CODING"
-    EVALUATING = "EVALUATING"
+    TESTING = "TESTING"
     REVIEW = "REVIEW"
     MERGED = "MERGED"
     REJECTED = "REJECTED"
@@ -170,7 +169,7 @@ class TaskState(str, SimpleEnum):
 TASK_WIP_STATES = (
     TaskState.PLANNING,
     TaskState.CODING,
-    TaskState.EVALUATING,
+    TaskState.TESTING,
 )
 
 

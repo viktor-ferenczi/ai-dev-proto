@@ -67,6 +67,7 @@ class TaskOrchestrator:
             if task.id in self.wip_tasks:
                 continue
 
+            print(f'Task continued: {task.id}')
             self.wip_tasks[task.id] = task
             pool.run(self.process_task(task))
 
@@ -78,6 +79,7 @@ class TaskOrchestrator:
             if task.state != TaskState.NEW:
                 continue
 
+            print(f'Task started: {task.id}')
             task.state = TaskState.PLANNING
             self.wip_tasks[task.id] = task
             pool.run(self.process_task(task))
@@ -89,98 +91,34 @@ class TaskOrchestrator:
         try:
             self.dump_task(task)
 
-            if task.sources is None:
-                await self.find_relevant_sources(task)
-                if not task.is_wip:
-                    return
+            if task.state == TaskState.PLANNING:
+                await self.plan_task(task)
+                self.dump_task(task)
 
-            self.dump_task(task)
+            if task.state == TaskState.CODING:
+                await self.code_task(task)
+                self.dump_task(task)
 
-            if not task.sources:
-                task.state = TaskState.FAILED
-                task.error = f'Found no relevant source files for this task'
-                return
+            if task.state == TaskState.TESTING:
+                await self.build_and_test_task(task)
+                self.dump_task(task)
 
-            self.dump_task(task)
-
-            async with AsyncPool() as pool:
-                for source in task.sources:
-                    pool.run(self.process_source(task, source))
-
-                while pool:
-                    await pool.wait()
-                    self.dump_task(task)
-
-            failed_sources = []
-            for source in task.sources:
-                if source.state == SourceState.FAILED:
-                    failed_sources.append(source)
-            if failed_sources:
-                task.state = TaskState.FAILED
-                task.error = join_lines(
-                    ['Failed to process source file(s):'] +
-                    [source.document.path for source in failed_sources]
-                )
-                return
-
-            self.dump_task(task)
-
-            assert all(source.state in (SourceState.COMPLETED, SourceState.SKIP) for source in task.sources), 'Invalid source states'
-
-            if not any(source.state == SourceState.COMPLETED for source in task.sources):
-                task.state = TaskState.FAILED
-                task.error = f'No changes made to any of the source files'
-                return
-
-            async with self.working_copy(task) as wc:
-                assert isinstance(wc, Project)
-
-                for source in task.sources:
-                    if source.state == SourceState.COMPLETED:
-                        source.implementation.write(wc.project_dir)
-
-                wc.format_code()
-
-                for source in task.sources:
-                    if source.state == SourceState.COMPLETED:
-                        source.implementation.update(wc.project_dir)
-
-                if not any(source.document.lines != source.implementation.lines for source in task.sources):
-                    task.state = TaskState.FAILED
-                    task.error = f'No changes made as part of the implementation'
-                    return
-
-                error = wc.build()
-                if error:
-                    await self.provide_feedback(task, 'build', error)
-                    task.state = TaskState.FAILED
-                    task.error = f'Failed to build solutions:\n\n{error}'
-                    return
-
-                error = wc.test()
-                if error:
-                    await self.provide_feedback(task, 'test', error)
-                    task.state = TaskState.FAILED
-                    task.error = f'Failed to test solutions:\n\n{error}'
-                    return
-
-                for source in task.sources:
-                    if source.state == SourceState.COMPLETED:
-                        wc.stage_change(source.implementation.path)
-
-                wc.commit(task.id)
-
-            task.state = TaskState.REVIEW
+            if task.state == TaskState.REVIEW:
+                print(f'Task completed: {task.id}')
 
         except Exception:
+            tb = traceback.format_exc()
             task.state = TaskState.FAILED
-            task.error = traceback.format_exc()
-            print(f'Task {task.id} failed with an unexpected error:')
-            print(task.error)
+            task.error = f'Unexpected error:\n{tb}'
+            print('---')
+            print(tb)
+            print('---')
 
-        finally:
-            self.dump_task(task)
-            del self.wip_tasks[task.id]
+        if task.state == TaskState.FAILED:
+            print(f'Task failed: {task.id}')
+
+        self.dump_task(task)
+        del self.wip_tasks[task.id]
 
     def dump_task(self, task: Task) -> None:
         dir_path = os.path.join(self.solution.folder, '.aidev', 'tasks')
@@ -192,7 +130,7 @@ class TaskOrchestrator:
         md_path = os.path.join(DOCS_DIR, f'{task.id}.json')
         write_text_file(md_path, render_markdown_template('task', task=task))
 
-    async def find_relevant_sources(self, task: Task):
+    async def plan_task(self, task: Task):
         async with self.working_copy(task) as wc:
             assert isinstance(wc, Project)
             ignored_paths = wc.list_ignored_paths()
@@ -265,15 +203,52 @@ class TaskOrchestrator:
         await gen.wait()
         return gen
 
+    async def code_task(self, task):
+        if not task.sources:
+            task.state = TaskState.FAILED
+            task.error = f'No source files to change'
+            return
+
+        async with AsyncPool() as pool:
+            for source in task.sources:
+                pool.run(self.process_source(task, source))
+
+            while pool:
+                await pool.wait()
+                self.dump_task(task)
+
+        failed_sources = []
+        for source in task.sources:
+            if source.state == SourceState.FAILED:
+                failed_sources.append(source)
+        if failed_sources:
+            task.state = TaskState.FAILED
+            task.error = join_lines(
+                ['Failed to change source file(s):'] +
+                [source.document.path for source in failed_sources]
+            )
+            return
+
+        self.dump_task(task)
+
+        assert all(source.state in (SourceState.COMPLETED, SourceState.SKIP) for source in task.sources), 'Invalid source states'
+
+        if not any(source.state == SourceState.COMPLETED for source in task.sources):
+            task.state = TaskState.FAILED
+            task.error = f'No changes made to any of the source files'
+            return
+
+        task.state = TaskState.TESTING
+
     async def process_source(self, task: Task, source: Source):
         if source.relevant is None:
             await self.find_relevant_code(task, source)
-            if source.state != SourceState.PENDING or task.is_wip:
+            if source.state != SourceState.PENDING or not task.is_wip:
                 return
 
         if source.implementation is None:
-            await self.implement_task(task, source)
-            if source.state != SourceState.PENDING or task.is_wip:
+            await self.implement_task_in_source(task, source)
+            if source.state != SourceState.PENDING or not task.is_wip:
                 return
 
         source.state = SourceState.COMPLETED
@@ -313,7 +288,7 @@ class TaskOrchestrator:
         patch.merge_hunks()
         source.relevant = patch.hunks[0]
 
-    async def implement_task(self, task: Task, source: Source):
+    async def implement_task_in_source(self, task: Task, source: Source):
         instruction = render_workflow_template(
             'implement_task',
             source=source.relevant.code_block,
@@ -346,6 +321,47 @@ class TaskOrchestrator:
         source.relevant.replacement = replacement_lines
         source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
         source.implementation = source.patch.apply()
+
+    async def build_and_test_task(self, task):
+        async with self.working_copy(task) as wc:
+            assert isinstance(wc, Project)
+
+            for source in task.sources:
+                if source.state == SourceState.COMPLETED:
+                    source.implementation.write(wc.project_dir)
+
+            wc.format_code()
+
+            for source in task.sources:
+                if source.state == SourceState.COMPLETED:
+                    source.implementation.update(wc.project_dir)
+
+            if not any(source.document.lines != source.implementation.lines for source in task.sources):
+                task.state = TaskState.FAILED
+                task.error = f'No changes made as part of the implementation'
+                return
+
+            error = wc.build()
+            if error:
+                await self.provide_feedback(task, 'build', error)
+                task.state = TaskState.FAILED
+                task.error = f'Failed to build solutions:\n\n{error}'
+                return
+
+            error = wc.test()
+            if error:
+                await self.provide_feedback(task, 'test', error)
+                task.state = TaskState.FAILED
+                task.error = f'Failed to test solutions:\n\n{error}'
+                return
+
+            for source in task.sources:
+                if source.state == SourceState.COMPLETED:
+                    wc.stage_change(source.implementation.path)
+
+            wc.commit(task.id)
+
+        task.state = TaskState.REVIEW
 
     async def provide_feedback(self, task: Task, critic: str, error: str):
         template_name = f'feedback_{critic}_error'
