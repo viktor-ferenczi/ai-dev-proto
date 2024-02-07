@@ -6,6 +6,11 @@ from aidev.editing.model import Hunk, Document, Block
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
+SOLUTIONS_DIR = os.path.join(SCRIPT_DIR, 'solutions')
+HELLO_WORLD_DIR = os.path.join(SOLUTIONS_DIR, 'HelloWorld')
+ORIGINAL_SOLUTION_DIR = os.path.join(HELLO_WORLD_DIR, 'original')
+OUTPUT_SOLUTION_DIR = os.path.join(HELLO_WORLD_DIR, 'output')
+
 
 def crop_text(count_tokens: Callable[[str], int], text: str, max_tokens: int, separator: str = '\n\n') -> str:
     assert max_tokens > 0

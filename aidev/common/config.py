@@ -95,6 +95,9 @@ class Config:
     # Async
     SLOW_CALLBACK_DURATION_THRESHOLD = 1.0  # s
 
+    # Code map
+    HASH_SYMBOL_IDS = False
+
     def save(self, path: str):
         with open(path, 'wt') as f:
             toml.dump({name: getattr(self, name) for name in self}, f)

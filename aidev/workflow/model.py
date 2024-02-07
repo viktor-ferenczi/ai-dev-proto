@@ -11,7 +11,7 @@ from ..engine.engine import Engine
 from ..engine.params import GenerationParams
 
 
-class GenerationState(str, SimpleEnum):
+class GenerationState(SimpleEnum):
     """Represents possible states of Generation"""
     PENDING = "PENDING"
     GENERATING = "GENERATING"
@@ -78,7 +78,7 @@ class Generation(BaseModel):
             await asyncio.sleep(0.2)
 
 
-class SourceState(str, SimpleEnum):
+class SourceState(SimpleEnum):
     """Represents possible states of Source"""
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"
@@ -154,7 +154,7 @@ class Feedback(BaseModel):
     """The criticism provided in Markdown format"""
 
 
-class TaskState(str, SimpleEnum):
+class TaskState(SimpleEnum):
     """Possible states of a Task"""
     NEW = "NEW"
     PLANNING = "PLANNING"

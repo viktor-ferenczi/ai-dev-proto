@@ -76,7 +76,7 @@ from pydantic import BaseModel
 from aidev.common.util import read_text_file, SimpleEnum, write_text_file, copy_indent, join_lines, extract_code_blocks, replace_tripple_backquote
 
 
-class DocType(str, SimpleEnum):
+class DocType(SimpleEnum):
     """Document type supported for editing by LLMs"""
 
     UNKNOWN = 'UNKNOWN'
@@ -131,7 +131,7 @@ class Block(BaseModel):
         return self.end - self.begin
 
     @classmethod
-    def from_range(cls, begin: int, end: int):
+    def from_range(cls, begin: int, end: int) -> 'Block':
         if not (0 <= begin <= end):
             raise ValueError(f'Invalid block range: begin={begin}, end={end}')
         return cls(begin=begin, end=end)

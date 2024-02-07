@@ -141,7 +141,7 @@ def copy_indent(example: str, text: str) -> str:
     return example[:-len(example.lstrip())] + text.lstrip()
 
 
-class SimpleEnum(Enum):
+class SimpleEnum(str, Enum):
 
     def __str__(self):
         return f"{self.name}"
@@ -297,6 +297,10 @@ def hash_file(path: str) -> str:
     return sha.hexdigest()
 
 
+def count_lines(text: str) -> int:
+    return 1 + text.count('\n')
+
+
 def decode_normalize(content: bytes) -> str:
     try:
         decoded = content.decode('utf-8')
@@ -307,7 +311,7 @@ def decode_normalize(content: bytes) -> str:
 
 
 def normalize(content: str) -> str:
-    return content.replace('\r\n', '\n').replace('\r', '').replace('\0', '\n')
+    return content.replace('\r\n', '\n').replace('\r', '').replace('\0', '\f')
 
 
 @contextmanager

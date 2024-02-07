@@ -9,6 +9,7 @@ lxml
 vllm-client
 jinja2
 tree-sitter
+python-magic-bin
 
 # Because of the tokenizers
 transformers

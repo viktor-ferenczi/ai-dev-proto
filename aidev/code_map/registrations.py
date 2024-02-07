@@ -1,50 +1,34 @@
 import json
 import os
 import shutil
+import sys
 from typing import Optional, Type
 
 from magic import Magic, MagicException
 from tree_sitter import Language
 
-from parsers.base_parser import BaseParser
-from parsers.cpp_parser import CppParser
-from parsers.csharp_parser import CSharpParser
-from parsers.css_parser import CssParser
-from parsers.html_parser import HtmlParser
-from parsers.ipynb_parser import PythonNotebookParser
-from parsers.java_parser import JavaParser
-from parsers.swift_parser import SwiftParser
-from parsers.javascript_parser import JavaScriptParser
-from parsers.markdown_parser import MarkdownParser
-from parsers.php_parser import PhpParser
-from parsers.python_parser import PythonParser
-from parsers.text_parser import TextParser
-from parsers.tsx_parser import TsxParser
-from parsers.typescript_parser import TypeScriptParser
+from .base_parser import PARSERS, BaseParser
 
-PARSERS = (
-    TextParser,
-    MarkdownParser,
-    PythonParser,
-    PythonNotebookParser,
-    JavaScriptParser,
-    TypeScriptParser,
-    TsxParser,
-    PhpParser,
-    HtmlParser,
-    CssParser,
-    CSharpParser,
-    CppParser,
-    JavaParser,
-    SwiftParser,
-)
+INITIALIZED = False
+
+
+def init_tree_sitter():
+    global INITIALIZED
+
+    if INITIALIZED:
+        return
+
+    map_parser_classes()
+    build_tree_sitter_library()
+    set_tree_sitter_languages()
+
 
 PARSERS_BY_NAME = {}
 PARSERS_BY_EXTENSION = {}
 PARSERS_BY_MIME_TYPE = {}
 
 
-def register_parsers():
+def map_parser_classes():
     for parser_cls in PARSERS:
         assert issubclass(parser_cls, BaseParser)
 
@@ -60,13 +44,12 @@ def register_parsers():
             PARSERS_BY_MIME_TYPE[mime_type] = parser_cls
 
 
-register_parsers()
-del register_parsers
+LIBRARY_EXT = 'dll' if sys.platform == 'win32' else 'so'
 
-TREE_SITTER_DIR = os.path.normpath(os.environ.get('TREE_SITTER_DI', os.path.expanduser('~/.tree-sitter')))
+TREE_SITTER_DIR = os.path.normpath(os.environ.get('TREE_SITTER_DIR', os.path.expanduser('~/.tree-sitter')))
 TREE_SITTER_REPOS_DIR = os.path.join(TREE_SITTER_DIR, 'repos')
 TREE_SITTER_BUILD_DIR = os.path.join(TREE_SITTER_DIR, 'build')
-TREE_SITTER_LIBRARY = os.path.join(TREE_SITTER_BUILD_DIR, 'my-languages.so')
+TREE_SITTER_LIBRARY = os.path.join(TREE_SITTER_BUILD_DIR, f'my-languages.{LIBRARY_EXT}')
 TREE_SITTER_LANGUAGES = os.path.join(TREE_SITTER_BUILD_DIR, 'languages.json')
 
 os.makedirs(TREE_SITTER_REPOS_DIR, exist_ok=True)
@@ -98,17 +81,11 @@ def build_tree_sitter_library():
         f.write(languages_json)
 
 
-build_tree_sitter_library()
-
-
 def set_tree_sitter_languages():
     for parser_cls in PARSERS:
         if parser_cls.tree_sitter_language_name:
             parser_cls.tree_sitter_language = Language(TREE_SITTER_LIBRARY, parser_cls.tree_sitter_language_name)
 
-
-set_tree_sitter_languages()
-del set_tree_sitter_languages
 
 MAGIC = Magic(mime=True)
 

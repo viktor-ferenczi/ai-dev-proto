@@ -5,17 +5,18 @@ from tree_sitter import Parser, Tree, TreeCursor, Node
 from ..common.config import C
 from ..common.util import decode_normalize
 from ..common.util import tiktoken_len, new_uuid
-from common.tree import walk_children
+from .tree_sitter_util import walk_children
 from model.fragment import Fragment
 from parsers.base_parser import BaseParser
 from ..splitters.text_splitter import TextSplitter
 
 
-class JavaScriptParser(BaseParser):
-    name = 'JavaScript'
-    extensions = ('js',)
-    mime_types = ('text/javascript',)
-    tree_sitter_language_name = 'javascript'
+class TypeScriptParser(BaseParser):
+    name = 'TypeScript'
+    extensions = ('ts',)
+    mime_types = ('application/typescript', 'application/x-typescript')
+    tree_sitter_language_name = 'typescript'
+    tree_sitter_subdir = ('typescript',)
     is_code = True
 
     def __init__(self) -> None:
@@ -40,6 +41,9 @@ class JavaScriptParser(BaseParser):
         tree: Tree = parser.parse(content)
         cursor: TreeCursor = tree.walk()
 
+        namespaces: Set[str] = set()
+        interfaces: Set[str] = set()
+        classes: Set[str] = set()
         functions: Set[str] = set()
         variables: Set[str] = set()
         usages: Set[str] = set()
@@ -53,12 +57,36 @@ class JavaScriptParser(BaseParser):
             if node.type == 'import_statement':
                 for sentence in self.splitter.split_text(decode_normalize(node.text)):
                     yield Fragment(new_uuid(), path, lineno + sentence.lineno - 1, depth, 'dependency', '', sentence.text, tiktoken_len(sentence.text))
-            elif (node.type == 'function' and
+            elif (node.type == 'namespace' and
                   node.next_sibling is not None and
                   node.next_sibling.type == 'identifier'):
                 name = decode_normalize(node.next_sibling.text)
+                namespaces.add(name)
+                text = f'namespace {name} {{...}}'
+                yield Fragment(new_uuid(), path, lineno, depth, 'namespace', name, text, tiktoken_len(text))
+            elif (node.type == 'interface' and
+                  node.next_sibling is not None and
+                  node.next_sibling.type == 'type_identifier' and
+                  node.parent is not None):
+                name = decode_normalize(node.next_sibling.text)
+                interfaces.add(name)
+                for sentence in self.splitter.split_text(decode_normalize(node.parent.text)):
+                    yield Fragment(new_uuid(), path, lineno + sentence.lineno - 1, depth, 'interface', name, sentence.text, tiktoken_len(sentence.text))
+            elif (node.type == 'class' and
+                  node.next_sibling is not None and
+                  node.next_sibling.type == 'type_identifier' and
+                  node.parent is not None):
+                name = decode_normalize(node.next_sibling.text)
+                classes.add(name)
+                for sentence in self.splitter.split_text(decode_normalize(node.parent.text)):
+                    yield Fragment(new_uuid(), path, lineno + sentence.lineno - 1, depth, 'class', name, sentence.text, tiktoken_len(sentence.text))
+            elif (node.type == 'function' and
+                  node.next_sibling is not None and
+                  node.next_sibling.type == 'identifier' and
+                  node.parent is not None):
+                name = decode_normalize(node.next_sibling.text)
                 functions.add(name)
-                for sentence in self.splitter.split_text(decode_normalize(node.text)):
+                for sentence in self.splitter.split_text(decode_normalize(node.parent.text)):
                     yield Fragment(new_uuid(), path, lineno + sentence.lineno - 1, depth, 'function', name, sentence.text, tiktoken_len(sentence.text))
             elif (node.type == 'identifier' and
                   node.next_sibling is not None and
@@ -77,11 +105,11 @@ class JavaScriptParser(BaseParser):
                 variables.add(name)
                 for sentence in self.splitter.split_text(text):
                     yield Fragment(new_uuid(), path, lineno + sentence.lineno - 1, depth, 'variable', name, sentence.text, tiktoken_len(sentence.text))
-            elif node.type == 'identifier':
+            elif node.type in ('identifier', 'type_identifier'):
                 name = decode_normalize(node.text)
                 usages.add(name)
 
-        usages -= functions | variables
+        usages -= namespaces | interfaces | classes | functions | variables
 
         variables.discard('$')
 
@@ -89,6 +117,12 @@ class JavaScriptParser(BaseParser):
         usages -= {v for v in usages if len(v) < 3 and not v[:1].isupper()}
 
         summary = []
+        if namespaces:
+            summary.append(f"  Namespaces: {' '.join(sorted(namespaces))}")
+        if interfaces:
+            summary.append(f"  Interfaces: {' '.join(sorted(interfaces))}")
+        if classes:
+            summary.append(f"  Classes: {' '.join(sorted(classes))}")
         if functions:
             summary.append(f"  Functions: {' '.join(sorted(functions))}")
         if variables:

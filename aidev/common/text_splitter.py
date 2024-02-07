@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Iterator, Collection, Tuple, List, Optional
 
+from aidev.common.util import count_lines
+
 
 @dataclass
 class Sentence:
@@ -47,7 +49,7 @@ class TextSplitter:
                 yield sentence
                 sentence = Sentence(lineno, length, depth, text, start)
 
-            lineno += text.count('\n')
+            lineno += count_lines(text)
             start += len(text)
 
         if sentence is not None:

@@ -6,7 +6,7 @@ from tree_sitter import Parser, Tree, TreeCursor, Node
 from ..common.config import C
 from ..common.util import decode_normalize
 from ..common.util import tiktoken_len, new_uuid
-from common.tree import walk_children
+from .tree_sitter_util import walk_children
 from model.fragment import Fragment
 from parsers.base_parser import BaseParser
 from ..splitters.text_splitter import TextSplitter

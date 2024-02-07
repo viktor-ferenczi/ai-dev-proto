@@ -1,18 +1,12 @@
 import asyncio
-import os
 import unittest
 
 from aidev.common.util import copy_directory
 from aidev.engine.vllm_engine import VllmEngine
+from aidev.tests.data import ORIGINAL_SOLUTION_DIR, OUTPUT_SOLUTION_DIR
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
 from aidev.workflow.model import Solution, Task, TaskState
 from aidev.workflow.task_orchestrator import TaskOrchestrator
-
-SCRIPT_DIR = os.path.normpath(os.path.dirname(__file__))
-SOLUTIONS_DIR = os.path.join(SCRIPT_DIR, 'solutions')
-HELLO_WORLD_DIR = os.path.join(SOLUTIONS_DIR, 'HelloWorld')
-ORIGINAL_SOLUTION_DIR = os.path.join(HELLO_WORLD_DIR, 'original')
-OUTPUT_SOLUTION_DIR = os.path.join(HELLO_WORLD_DIR, 'output')
 
 
 class TaskOrchestratorTest(unittest.IsolatedAsyncioTestCase):
