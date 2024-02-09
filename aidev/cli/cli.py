@@ -6,7 +6,7 @@ from logging import DEBUG
 from typing import Optional
 
 from aidev.code_map.parsers import init_tree_sitter
-from aidev.common.config import C
+from aidev.common.config import C, AIDEV_PACKAGE_DIR
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
 from aidev.developer.project import Project
 from aidev.editing.model import Document
@@ -118,6 +118,16 @@ async def command_fix(project: Project, branch: str, source: str):
 
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')
+
+    # FIXME !!! Removing all existing task info, good until each run is new (before persistence is implemented)
+    solution_tasks_dir = os.path.join(solution.folder, '.aidev', 'tasks')
+    for fn in os.listdir(solution_tasks_dir):
+        if fn.endswith('.json'):
+            os.remove(os.path.join(solution_tasks_dir, fn))
+    docs_dir = os.path.join(AIDEV_PACKAGE_DIR, 'workflow', 'docs')
+    for fn in os.listdir(docs_dir):
+        if fn.endswith('.md'):
+            os.remove(os.path.join(docs_dir, fn))
 
     sonar = SonarClient(project.project_name)
     if not sonar.get_issues():
