@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .model import Solution, Task, TaskState, Source, Generation, GenerationState, SourceState, Feedback
 from ..code_map.model import Graph, Symbol, Category
-from ..code_map.registrations import detect_parser
+from ..code_map.parsers import detect_parser
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
 from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, decode_normalize
@@ -66,6 +66,9 @@ class TaskOrchestrator:
 
     def pick_up_running_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
+            if len(self.wip_tasks) >= self.max_parallel_tasks:
+                break
+
             if not task.is_wip:
                 continue
 
@@ -76,11 +79,11 @@ class TaskOrchestrator:
             self.wip_tasks[task.id] = task
             pool.run(self.process_task(task))
 
-            if len(self.wip_tasks) == self.max_parallel_tasks:
-                break
-
     def start_new_tasks(self, pool: AsyncPool):
         for task in self.solution.tasks.values():
+            if len(self.wip_tasks) >= self.max_parallel_tasks:
+                break
+
             if task.state != TaskState.NEW:
                 continue
 
@@ -89,16 +92,19 @@ class TaskOrchestrator:
             self.wip_tasks[task.id] = task
             pool.run(self.process_task(task))
 
-            if len(self.wip_tasks) == self.max_parallel_tasks:
-                break
-
     async def process_task(self, task: Task):
         try:
             self.dump_task(task)
 
             if task.state == TaskState.PLANNING:
                 await self.find_source_files(task)
+                if task.state == TaskState.FAILED:
+                    return
+
                 source_lines = await self.build_code_map(task)
+                if task.state == TaskState.FAILED:
+                    return
+
                 self.dump_task(task)
                 await self.plan_task(task, source_lines)
                 self.dump_task(task)
@@ -135,8 +141,12 @@ class TaskOrchestrator:
         write_text_file(json_path, task.model_dump_json(indent=2))
 
         os.makedirs(DOCS_DIR, exist_ok=True)
-        md_path = os.path.join(DOCS_DIR, f'{task.id}.json')
+        md_path = os.path.join(DOCS_DIR, f'{task.id}.md')
         write_text_file(md_path, render_markdown_template('task', task=task))
+
+        index_path = os.path.join(DOCS_DIR, 'index.md')
+        index_md = '## Tasks\n\n' + ''.join(f'- [{t.id}]({t.id}.md)\n' for t in self.solution.tasks.values() if task.state != TaskState.NEW)
+        write_text_file(index_path, index_md)
 
     async def find_source_files(self, task: Task):
         async with self.working_copy(task) as wc:
@@ -151,12 +161,14 @@ class TaskOrchestrator:
                     task.error = 'Could not list files ignored from the repository'
                     return
 
-        paths = [
-            path for path in self.solution.iter_relative_source_paths()
-            if path not in ignored_paths
-               and '/.' not in f'/{path}/'  # FIXME: Too generic
-               and '/Migrations/' not in f'/{path}/'  # FIXME: Solution specific
-        ]
+            paths = [
+                path for path in self.solution.iter_relative_source_paths()
+                if path not in ignored_paths
+                   and '/.' not in f'/{path}/'  # FIXME: Too generic
+                   and '/Migrations/' not in f'/{path}/'  # FIXME: Solution specific
+                   and detect_parser(os.path.join(wc.project_dir, path)) is not None
+            ]
+
         if not paths:
             task.state = TaskState.FAILED
             task.error = 'No source files in solution'
@@ -198,7 +210,7 @@ class TaskOrchestrator:
 
         for _ in range(C.MAX_PLANNING_STEPS):
 
-            facts = [source_lines[symbol.path][symbol.block.begin:symbol.block.end] for symbol in symbols]
+            facts = [join_lines(source_lines[symbol.path][symbol.block.begin:symbol.block.end]) for symbol in symbols]
 
             instruction = render_workflow_template(
                 'plan',
@@ -206,7 +218,7 @@ class TaskOrchestrator:
                 facts=facts,
                 response_schema=response_schema,
             )
-            constraint = Constraint.from_regex(rf'.*\n\n```\n{"state": ("INCOMPLETE"|"READY"), "names": \[(".*?"(, ".*?")*)?\]}\n```\n')
+            constraint = Constraint.from_regex(r'Step-by-step plan to implement the TASK:\n\n.*\n\n```\n\{"state": "(INCOMPLETE|READY)", "names": (\[\]|\[".*?"\]|\[".*?"(?:, ".*?")+\])\}\n```\n')
             params = GenerationParams(max_tokens=2000, temperature=self.temperature, constraint=constraint)
             gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
             task.planning_generations.append(gen)
@@ -283,6 +295,8 @@ class TaskOrchestrator:
             for path in sorted(selected_paths)
         ]
 
+        task.state = TaskState.CODING
+
     async def find_relevant_sources_in_chunk(self, task: Task, chunk: list[str], n: int) -> Generation:
         instruction = render_workflow_template(
             'find_relevant_sources',
@@ -349,8 +363,8 @@ class TaskOrchestrator:
     async def find_relevant_code(self, task: Task, source: Source):
         instruction = render_workflow_template(
             'find_relevant_code',
+            task=task,
             source=source.document.code_block,
-            task_description=task.description,
         )
 
         code_block_type = source.document.doctype.code_block_type
@@ -384,8 +398,8 @@ class TaskOrchestrator:
     async def implement_task_in_source(self, task: Task, source: Source):
         instruction = render_workflow_template(
             'implement_task',
+            task=task,
             source=source.relevant.code_block,
-            task_description=task.description,
         )
 
         code_block_type = source.document.doctype.code_block_type

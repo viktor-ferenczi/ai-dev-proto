@@ -7,7 +7,6 @@ from tree_sitter import Tree, TreeCursor
 
 from .tree_sitter_util import walk_nodes, find_first_node
 from .model import Graph, Symbol, Category, Relation, Block
-from .base_parser import register
 from .tree_sitter_parser import TreeSitterParser
 from ..common.util import decode_normalize
 
@@ -22,7 +21,6 @@ class Context(BaseModel):
         return cls(parent=parent, relation=relation, last_lineno=last_lineno)
 
 
-@register
 class CSharpParser(TreeSitterParser):
     name = 'CSharp'
     extensions = ('cs',)

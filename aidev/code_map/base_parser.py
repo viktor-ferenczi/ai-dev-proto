@@ -1,4 +1,4 @@
-from typing import Tuple, TypeVar
+from typing import Tuple
 
 import tree_sitter
 from .model import Graph
@@ -15,11 +15,6 @@ class BaseParser:
     is_code = False
     debug = C.VERBOSE
 
-    def __new__(cls):
-        from .registrations import init_tree_sitter
-        init_tree_sitter()
-        return super().__new__(cls)
-
     def __init__(self) -> None:
         assert self.name
         assert self.extensions
@@ -27,13 +22,3 @@ class BaseParser:
 
     def parse(self, graph: Graph, path: str, content: bytes):
         raise NotImplementedError()
-
-
-ParserClass = TypeVar('ParserClass', bound=BaseParser)
-
-PARSERS: list[ParserClass] = []
-
-
-def register(cls: ParserClass):
-    PARSERS.append(cls)
-    return cls

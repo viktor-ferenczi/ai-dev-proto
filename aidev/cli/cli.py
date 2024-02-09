@@ -5,6 +5,7 @@ import os
 from logging import DEBUG
 from typing import Optional
 
+from aidev.code_map.parsers import init_tree_sitter
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
 from aidev.developer.project import Project
@@ -112,6 +113,8 @@ async def main(argv: Optional[list[str]] = None):
 
 async def command_fix(project: Project, branch: str, source: str):
     assert source == 'sonar', f'Unknown source: {source}'
+
+    init_tree_sitter()
 
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')

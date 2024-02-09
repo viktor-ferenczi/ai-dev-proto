@@ -7,7 +7,21 @@ from typing import Optional, Type
 from magic import Magic, MagicException
 from tree_sitter import Language
 
-from .base_parser import PARSERS, BaseParser
+from .base_parser import BaseParser
+
+ParserClass = Type[BaseParser]
+
+PARSERS: list[ParserClass] = []
+
+
+def register(cls: ParserClass):
+    PARSERS.append(cls)
+    return cls
+
+
+from .csharp_parser import CSharpParser
+
+register(CSharpParser)
 
 INITIALIZED = False
 
