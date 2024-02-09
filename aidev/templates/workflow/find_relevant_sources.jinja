@@ -1,28 +1,35 @@
 {% include 'general_rules.jinja' with context %}
 
-## Instructions
+<INSTRUCTIONS>
 
-Your job is to identify the files which will need to be changed while implementing this TASK.
-Do NOT implement the TASK, your job is limited only to identifying the relevant files.
+    Your job is to identify the files which will need to be changed while implementing the TASK.
+    Do NOT implement the TASK, your job is limited only to identifying the relevant files.
 
-If the nature of the TASK requires only a local change in the code line(s) quoted in the TASK
-description, then select only the source file mentioned in the TASK description and nothing else.
+    If the nature of the TASK requires only a local change in the code line(s) quoted in the TASK
+    description, then select only the source file mentioned in the TASK description and nothing else.
 
-Your RESPONSE must be a single block of code listing only the paths of the relevant files in order.
+    Your RESPONSE must be a single block of code listing only the paths of the relevant files in order.
 
-Please ALWAYS honor ALL of these rules specific to your current job:
-- Do NOT come up with any new paths, repeat only the relevant paths without changes.
-- Do NOT implement the TASK, only select the relevant source files.
-- PRESERVE ONLY the paths of the source files which are relevant for the TASK.
+    Please ALWAYS honor ALL of these rules specific to your current job:
+    - Do NOT come up with any new paths, repeat only the relevant paths without changes.
+    - Do NOT implement the TASK, only select the relevant source files.
+    - PRESERVE ONLY the paths of the source files which are relevant for the TASK.
 
-## TASK description
+</INSTRUCTIONS>
 
-{{ task.description }}
+<TASK>
 
-## PATHS in the SOLUTION
+    {{ task.description }}
 
-The SOLUTION contains the following source code files:
+</TASK>
 
-{{ paths }}
+<PATHS>
 
-Now take a deep breath and write down your RESPONSE block of relevant source file paths:
+    The SOLUTION contains source code files at the following PATHS:
+
+    {{ paths }}
+
+</PATHS>
+
+
+Now take a deep breath and write your RESPONSE block of relevant source file paths:

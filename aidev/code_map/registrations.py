@@ -97,7 +97,7 @@ def detect_mime(body: bytes) -> str:
         return ''
 
 
-def detect(path: str, mime_type: Optional[str] = None) -> Optional[Type[BaseParser]]:
+def detect_parser(path: str, mime_type: Optional[str] = None) -> Optional[Type[BaseParser]]:
     parser_cls = None
 
     if '.' in path:

@@ -1,13 +1,18 @@
 import asyncio
+import json
 import os
 import traceback
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, Set
+from typing import AsyncContextManager, Set, Optional
+
+from pydantic import BaseModel
 
 from .model import Solution, Task, TaskState, Source, Generation, GenerationState, SourceState, Feedback
+from ..code_map.model import Graph, Symbol, Category
+from ..code_map.registrations import detect_parser
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
-from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template
+from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, decode_normalize
 from ..developer.project import Project
 from ..editing.model import Patch
 from ..engine.params import GenerationParams, Constraint
@@ -92,7 +97,10 @@ class TaskOrchestrator:
             self.dump_task(task)
 
             if task.state == TaskState.PLANNING:
-                await self.plan_task(task)
+                await self.find_source_files(task)
+                source_lines = await self.build_code_map(task)
+                self.dump_task(task)
+                await self.plan_task(task, source_lines)
                 self.dump_task(task)
 
             if task.state == TaskState.CODING:
@@ -130,7 +138,7 @@ class TaskOrchestrator:
         md_path = os.path.join(DOCS_DIR, f'{task.id}.json')
         write_text_file(md_path, render_markdown_template('task', task=task))
 
-    async def plan_task(self, task: Task):
+    async def find_source_files(self, task: Task):
         async with self.working_copy(task) as wc:
             assert isinstance(wc, Project)
             ignored_paths = wc.list_ignored_paths()
@@ -154,31 +162,116 @@ class TaskOrchestrator:
             task.error = 'No source files in solution'
             return
 
-        if len(paths) == 1:
-            source = Source.from_file(self.solution.folder, paths[0])
-            task.sources = [source]
-            return
+        task.paths = paths
 
-        task.source_selection_generations = []
+    async def build_code_map(self, task: Task) -> dict[str, list[str]]:
+        graph = Graph.new()
+        source_lines: dict[str, list[str]] = {}
 
-        chunk_size: int = 20
-        selected_paths: Set[str] = set()
-        for i in range(0, len(paths), chunk_size):
-            chunk = paths[i:i + chunk_size]
+        async with self.working_copy(task) as wc:
+            assert isinstance(wc, Project)
+            for path in task.paths:
+                full_path = os.path.join(wc.project_dir, path)
+                parser_cls = detect_parser(full_path)
+                if parser_cls is None:
+                    continue
+                parser = parser_cls()
+                content = read_binary_file(full_path)
+                parser.parse(graph, path, content)
+                source_lines[path] = decode_normalize(content).split('\n')
 
-            gen = await self.find_relevant_sources_in_chunk(task, chunk, 2)
+        task.code_map = graph
+        return source_lines
+
+    async def plan_task(self, task: Task, source_lines: dict[str, list[str]]):
+
+        task.planning_generations = []
+
+        class PlanResponse(BaseModel):
+            state: str
+            names: list[str]
+
+        response_schema = PlanResponse.model_json_schema()
+
+        symbols: Set[Symbol] = set()
+        plan: Optional[str] = None
+
+        for _ in range(C.MAX_PLANNING_STEPS):
+
+            facts = [source_lines[symbol.path][symbol.block.begin:symbol.block.end] for symbol in symbols]
+
+            instruction = render_workflow_template(
+                'plan',
+                task=task,
+                facts=facts,
+                response_schema=response_schema,
+            )
+            constraint = Constraint.from_regex(rf'.*\n\n```\n{"state": ("INCOMPLETE"|"READY"), "names": \[(".*?"(, ".*?")*)?\]}\n```\n')
+            params = GenerationParams(max_tokens=2000, temperature=self.temperature, constraint=constraint)
+            gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+            task.planning_generations.append(gen)
+            await gen.wait()
+
             if gen.state == GenerationState.FAILED:
                 task.state = TaskState.FAILED
-                task.error = f'Failed to generate the list of relevant source files:\n\n{gen.error}'
+                task.error = f'Failed to plan the implementation:\n\n{gen.error}'
                 return
 
-            for completion in gen.completions:
-                selected_paths.update(completion.strip().split('\n')[1:-1])
+            completion = gen.completions[0]
+            parts = completion.rsplit('\n```\n', 2)
 
-        gen = await self.find_relevant_sources_in_chunk(task, sorted(selected_paths), 4)
-        selected_paths = set()
-        for completion in gen.completions:
-            selected_paths |= set(completion.strip().split('\n')[1:-1])
+            if len(parts) != 3:
+                task.state = TaskState.FAILED
+                task.error = f'The plan does not end in a code block'
+                return
+
+            if parts[-1].strip():
+                task.state = TaskState.FAILED
+                task.error = f'Trailing garbage in plan completion'
+                return
+
+            response = PlanResponse(**json.loads(parts[1]))
+
+            if response.state == 'READY':
+                plan = parts[0].strip()
+                break
+
+            if response.state != 'INCOMPLETE':
+                task.state = TaskState.FAILED
+                task.error = f'Invalid plan response state: {response.state}'
+                return
+
+            symbol_names_and_paths = {symbol.name for symbol in symbols}
+            symbol_names_and_paths.update(symbol.path for symbol in symbols)
+            new_names = [name for name in response.names if name not in symbol_names_and_paths]
+
+            if not new_names:
+                task.state = TaskState.FAILED
+                task.error = f'Incomplete plan with no new names requested'
+                return
+
+            for name in new_names:
+                for symbol in task.code_map.symbols.values():
+                    if symbol.block is None:
+                        continue
+                    if symbol.category == Category.SOURCE:
+                        if symbol.path == name:
+                            symbols.add(symbol)
+                    elif symbol.name == name:
+                        symbols.add(symbol)
+
+        if plan is None:
+            task.state = TaskState.FAILED
+            task.error = f'Failed to plan the implementation in {C.MAX_PLANNING_STEPS} steps'
+            return
+
+        task.plan = plan
+
+        selected_paths = {symbol.path for symbol in symbols}
+
+        for path in task.paths:
+            if path in task.description:
+                selected_paths.add(path)
 
         if not selected_paths:
             task.state = TaskState.FAILED

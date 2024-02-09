@@ -194,16 +194,15 @@ def render_template(_path: str, **variables) -> str:
 
 def render_workflow_template(_name: str, **variables) -> str:
     path = os.path.join(C.WORKFLOW_TEMPLATES_DIR, f'{_name}.jinja')
-    return render_template(path, **variables)
+    return unindent_code_blocks(render_template(path, **variables))
 
 
 def render_markdown_template(_name: str, **variables) -> str:
     path = os.path.join(C.MARKDOWN_TEMPLATES_DIR, f'{_name}.jinja')
-    indented_markdown = render_template(path, **variables)
-    return unindent_markdown(indented_markdown)
+    return unindent_code_blocks(render_template(path, **variables))
 
 
-def unindent_markdown(md: str) -> str:
+def unindent_code_blocks(md: str) -> str:
     lines = md.split('\n')
 
     in_code = False

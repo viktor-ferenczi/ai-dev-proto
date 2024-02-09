@@ -98,6 +98,9 @@ class Config:
     # Code map
     HASH_SYMBOL_IDS = False
 
+    # Planning
+    MAX_PLANNING_STEPS = 10
+
     def save(self, path: str):
         with open(path, 'wt') as f:
             toml.dump({name: getattr(self, name) for name in self}, f)

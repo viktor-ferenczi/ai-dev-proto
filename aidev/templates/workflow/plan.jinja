@@ -1,0 +1,52 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to write a step-by-step PLAN to implement the TASK.
+    Do NOT implement the TASK, your job is limited only to planning
+    and identifying any missing information which prevents the planning.
+
+    Your RESPONSE must contain the following in strict order:
+
+    1. The step-by-step PLAN to implement the TASK as free-form text.
+    2. A code block containing a JSON object conforming to this schema: {{ response_schema }}
+
+    While writing your step-by-step PLAN also consider whether you have all
+    the information to come up with the right steps. If any information is
+    missing, then identify those missing dependencies and stop writing the
+    plan any further.
+
+    In the JSON object fill out the fields with the following:
+
+    Set the "state" field to "INCOMPLETE" if the PLAN
+    is incomplete due to missing dependencies or information.
+    In this case list the name of any namespace, type or variable
+    you need to know more about in order to progress with the PLAN.
+
+    Set the "state" field to "READY" if you are ready know everything and
+    the right step-by-step PLAN has already been provided.
+    In this case leave the "names" field as an empty list.
+
+</INSTRUCTIONS>
+
+<TASK>
+
+    {{ task.description }}
+
+</TASK>
+
+{% if facts %}
+    <ADDITIONAL-INFORMATION>
+
+        {% for fact in facts %}
+
+            ```
+            {{ fact }}
+            ```
+
+        {% endfor %}
+
+    </ADDITIONAL-INFORMATION>
+{% endif %}
+
+Now take a deep breath and write your RESPONSE:

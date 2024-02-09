@@ -4,6 +4,7 @@ from traceback import format_exc
 from typing import Optional, Iterable
 from pydantic import BaseModel
 
+from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum
 from ..editing.model import Patch, Document, Hunk
@@ -197,8 +198,17 @@ class Task(BaseModel):
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
+    paths: Optional[list[str]] = None
+    """Paths of all source files in the solution which may be considered"""
+
+    code_map: Optional[Graph] = None
+    """Code map constructed from parsing all the source files"""
+
     planning_generations: Optional[list[Generation]] = None
     """Text generations used for planning the implementation"""
+
+    plan: Optional[str] = None
+    """Step-by-step plan to implement the task"""
 
     sources: Optional[list[Source]] = None
     """Source files that need to be modified, extended during planning"""
