@@ -431,23 +431,22 @@ class Patch(BaseModel):
                         document: Document,
                         completion: str,
                         ) -> 'Patch':
+        code_blocks = extract_code_blocks(completion)
+        if not code_blocks:
+            raise ValueError(f'No code block found in the completion')
+        if len(code_blocks) > 1:
+            raise ValueError(f'More than one code block found in the completion')
+
         hunks: list[Hunk] = []
-        for code_block in extract_code_blocks(completion):
+        code_block: str = code_blocks[0]
+        code_lines: list[str] = code_block.split('\n')
 
-            if not code_block.strip():
-                continue
+        for block in iter_find_partial_blocks(document.lines, code_lines):
+            hunk = Hunk.from_document(document, block)
+            hunks.append(hunk)
 
-            code_lines: list[str] = code_block.split('\n')
-
-            start = 0
-            while start < len(code_lines):
-                for block in iter_find_partial_blocks(document.lines, 0, code_lines, start):
-                    hunk = Hunk.from_document(document, block)
-                    hunks.append(hunk)
-                    start += block.line_count
-                    break
-                else:
-                    raise ValueError(f'Code lines not found {start}:{len(code_lines)}')
+        if not hunks:
+            raise ValueError(f'No matching code lines found in the completion')
 
         return cls(document=document, hunks=hunks)
 
@@ -476,34 +475,22 @@ class Patch(BaseModel):
         self.hunks[:] = [hunk]
 
 
-def iter_find_partial_blocks(
-        doc: list[str],
-        doc_start: int,
-        block: list[str],
-        block_start: int,
-) -> Iterable[Block]:
-    assert doc_start >= 0
-    assert block_start >= 0
-
+def iter_find_partial_blocks(doc: list[str], block: list[str]) -> Iterable[Block]:
     doc_len = len(doc)
     block_len = len(block)
 
-    if doc_start >= doc_len or block_start >= block_len:
-        return
-
-    j = block_start
-    for i in range(doc_start, doc_len):
-
-        doc_line = doc[i]
-        if doc_line != block[j]:
-            continue
-
-        remaining = min(doc_len - i, block_len - j)
-        for k in range(remaining):
-            if doc[i + k] != block[j + k]:
-                yield Block.from_range(i, i + k)
-                j += k
+    i = 0
+    j = 0
+    matched = 0
+    for i in range(doc_len):
+        if doc[i] == block[j]:
+            matched += 1
+            j += 1
+            if j == block_len:
                 break
-        else:
-            yield Block.from_range(i, i + remaining)
-            break
+        elif matched:
+            yield Block.from_range(i - matched, i)
+            matched = 0
+
+    if matched:
+        yield Block.from_range(i - matched, i)
