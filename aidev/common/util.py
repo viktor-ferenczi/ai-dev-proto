@@ -208,12 +208,13 @@ def unindent_code_blocks(md: str) -> str:
     in_code = False
     for i, line in enumerate(lines):
 
-        if not in_code:
-            lines[i] = line = line.strip()
-
-        if line.startswith('```'):
+        if line.lstrip().startswith('```'):
+            lines[i] = line.strip()
             in_code = not in_code
             continue
+
+        if not in_code:
+            lines[i] = line.strip()
 
     return join_lines(lines)
 
