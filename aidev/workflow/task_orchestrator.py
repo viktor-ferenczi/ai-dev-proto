@@ -13,7 +13,7 @@ from ..code_map.parsers import detect_parser
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
 from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, decode_normalize
-from ..developer.project import Project
+from ..workflow.working_copy import WorkingCopy
 from ..editing.model import Patch
 from ..engine.params import GenerationParams, Constraint
 
@@ -37,9 +37,9 @@ class TaskOrchestrator:
         self.temperature: float = 0.2
 
     @asynccontextmanager
-    async def working_copy(self, task: Task) -> AsyncContextManager[Project]:
+    async def working_copy(self, task: Task) -> AsyncContextManager[WorkingCopy]:
         # FIXME: Multiple folder support with a semaphore
-        project = Project(self.solution.folder, self.solution.name)
+        project = WorkingCopy(self.solution.folder, self.solution.name)
         await self.working_copy_lock.acquire()
         try:
             if project.has_changes():
@@ -150,7 +150,7 @@ class TaskOrchestrator:
 
     async def find_source_files(self, task: Task):
         async with self.working_copy(task) as wc:
-            assert isinstance(wc, Project)
+            assert isinstance(wc, WorkingCopy)
             ignored_paths = wc.list_ignored_paths()
             if ignored_paths is None:
                 # FIXME: Code to work with a test case
@@ -181,7 +181,7 @@ class TaskOrchestrator:
         source_lines: dict[str, list[str]] = {}
 
         async with self.working_copy(task) as wc:
-            assert isinstance(wc, Project)
+            assert isinstance(wc, WorkingCopy)
             for path in task.paths:
                 full_path = os.path.join(wc.project_dir, path)
                 parser_cls = detect_parser(full_path)
@@ -431,7 +431,7 @@ class TaskOrchestrator:
 
     async def build_and_test_task(self, task):
         async with self.working_copy(task) as wc:
-            assert isinstance(wc, Project)
+            assert isinstance(wc, WorkingCopy)
 
             for source in task.sources:
                 if source.state == SourceState.COMPLETED:

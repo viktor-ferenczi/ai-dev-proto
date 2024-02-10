@@ -4,10 +4,10 @@ from typing import Iterable, Tuple
 
 from .fixture_coder import FixtureCoder
 from .mvc import Controller, Method
-from ..common.config import C
 from ..common.dbdump import DatabaseDumper
+from ..common.util import join_lines
 from ..developer.bugfix_coder import BugfixCoder
-from ..developer.project import Project
+from ..workflow.working_copy import WorkingCopy
 from ..engine.engine import Engine
 from ..sonar.client import SonarClient
 from ..sonar.issue import Issue, IssueStatus
@@ -15,7 +15,7 @@ from ..sonar.issue import Issue, IssueStatus
 
 class Developer:
 
-    def __init__(self, project: Project, sonar: SonarClient, engine: Engine):
+    def __init__(self, project: WorkingCopy, sonar: SonarClient, engine: Engine):
         self.project = project
         self.sonar = sonar
         self.engine = engine
