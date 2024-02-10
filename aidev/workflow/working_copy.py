@@ -1,3 +1,4 @@
+import asyncio
 import os
 from subprocess import check_output, Popen, STDOUT, PIPE
 from typing import Optional, Set
@@ -15,6 +16,7 @@ class WorkingCopy:
         self.config_path: str = os.path.join(self.project_dir, 'aidev.toml')
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
         self.tasks_dir: str = os.path.join(self.aidev_dir, "tasks")
+        self.audit_dir: str = os.path.join(self.aidev_dir, "audit")
         self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
 
         self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
@@ -24,8 +26,23 @@ class WorkingCopy:
 
         os.makedirs(self.aidev_dir, exist_ok=True)
         os.makedirs(self.tasks_dir, exist_ok=True)
+        os.makedirs(self.audit_dir, exist_ok=True)
 
         self.has_repository = os.path.isdir(os.path.join(self.project_dir, '.git'))
+
+        self.lock: asyncio.Lock = asyncio.Lock()
+
+    async def __aenter__(self):
+        await self.lock.acquire()
+
+        if self.has_changes():
+            raise IOError(f'This working copy folder has unexpected changes: {self.project_dir}')
+
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self.roll_back_changes('.')
+        self.lock.release()
 
     def load_config(self):
         if os.path.exists(self.config_path):

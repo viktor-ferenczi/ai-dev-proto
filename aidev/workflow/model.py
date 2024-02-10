@@ -202,7 +202,7 @@ class Task(BaseModel):
     """Paths of all source files in the solution which may be considered"""
 
     code_map: Optional[Graph] = None
-    """Code map constructed from parsing all the source files"""
+    """Code map constructed from parsing all the source files before making any changes"""
 
     planning_generations: Optional[list[Generation]] = None
     """Text generations used for planning the implementation"""
