@@ -16,6 +16,18 @@
     {{ response_schema }}
     ```
 
+    Fill the JSON fields with the following:
+
+    Set the "state" field to "INCOMPLETE" if you need to see more source code related
+    to the TASK in order to fully understand its scope and the code changes required.
+    In this case fill in the "names" field with the list of the symbols you want to be
+    retrieved. These names can be source paths, namespaces, interfaces, classes,
+    structs, records, methods, functions or variables.
+
+    Set the "state" field to "READY" if you have seen all the source code which needs
+    to be known to work on the code changes required to implement the TASK. In this case
+    set the "names" field as an empty list.
+
 </INSTRUCTIONS>
 
 <TASK>
@@ -37,21 +49,5 @@
 
     </RELEVANT-SOURCE-CODE>
 {% endif %}
-
-<INSTRUCTIONS>
-
-    Fill the JSON fields with the following:
-
-    Set the "state" field to "INCOMPLETE" if you need to see more source code related
-    to the TASK in order to fully understand its scope and the code changes required.
-    In this case fill in the "names" field with the list of the symbols you want to be
-    retrieved. These names can be source paths, namespaces, interfaces, classes,
-    structs, records, methods, functions or variables.
-
-    Set the "state" field to "READY" if you have seen all the source code which needs
-    to be known to work on the code changes required to implement the TASK. In this case
-    set the "names" field as an empty list.
-
-</INSTRUCTIONS>
 
 Now take a deep breath and write your RESPONSE:
