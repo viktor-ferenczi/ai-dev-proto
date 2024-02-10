@@ -2,38 +2,19 @@
 
 <INSTRUCTIONS>
 
-    Your job is to write a step-by-step PLAN to implement the TASK.
-    The TASK is either the description of a code smell which you need
-    to plan how to fix or a short description of some code change to
-    implement. It may also include the path of a source files and the
-    source code lines the code smell was found in. Plan accordingly.
+    Your job is to determine the code changes required to implement
+    the TASK below. The TASK is either a code smell or bug which needs
+    to be fixed or a feature or change which needs to be implemented.
 
-    Do NOT implement the TASK, your job is limited only to planning
-    and identifying any missing information which prevents the planning.
+    Do NOT implement the TASK. Your job is limited only to determining
+    the code changes required to implement and to identify any additional
+    source code which needs to be known or get changed to do that.
 
-    Your RESPONSE must contain the following in strict order:
+    Your RESPONSE must adhere to this JSON schema:
 
-    1. The step-by-step PLAN to implement the TASK as free-form text.
-    2. A code block containing a JSON object conforming to this schema: {{ response_schema }}
-
-    While writing your step-by-step PLAN consider whether you have all
-    the information required to come up with the right steps. If any
-    information is missing, then identify those missing dependencies
-    and stop writing the plan any further.
-
-    In the JSON object fill out the fields with the following:
-
-    Set the "state" field to "INCOMPLETE" if the PLAN
-    is incomplete due to missing dependencies or information.
-    In this case list the name of any namespace, type or variable
-    you need to know more about in order to progress with the PLAN.
-
-    Set the "state" field to "READY" if you are ready know everything and
-    the right step-by-step PLAN has already been provided.
-    In this case leave the "names" field as an empty list.
-
-    Your step-by-step plan must start with this line:
-    Step-by-step plan to implement the TASK:
+    ```jsonschema
+    {{ response_schema }}
+    ```
 
 </INSTRUCTIONS>
 
@@ -44,7 +25,7 @@
 </TASK>
 
 {% if facts %}
-    <ADDITIONAL-INFORMATION>
+    <RELEVANT-SOURCE-CODE>
 
         {% for fact in facts %}
 
@@ -54,7 +35,23 @@
 
         {% endfor %}
 
-    </ADDITIONAL-INFORMATION>
+    </RELEVANT-SOURCE-CODE>
 {% endif %}
+
+<INSTRUCTIONS>
+
+    Fill the JSON fields with the following:
+
+    Set the "state" field to "INCOMPLETE" if you need to see more source code related
+    to the TASK in order to fully understand its scope and the code changes required.
+    In this case fill in the "names" field with the list of the symbols you want to be
+    retrieved. These names can be source paths, namespaces, interfaces, classes,
+    structs, records, methods, functions or variables.
+
+    Set the "state" field to "READY" if you have seen all the source code which needs
+    to be known to work on the code changes required to implement the TASK. In this case
+    set the "names" field as an empty list.
+
+</INSTRUCTIONS>
 
 Now take a deep breath and write your RESPONSE:
