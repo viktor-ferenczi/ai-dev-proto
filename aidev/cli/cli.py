@@ -119,16 +119,6 @@ async def command_fix(project: WorkingCopy, branch: str, source: str):
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')
 
-    # FIXME !!! Removing all existing task info, good until each run is new (before persistence is implemented)
-    solution_tasks_dir = os.path.join(solution.folder, '.aidev', 'tasks')
-    for fn in os.listdir(solution_tasks_dir):
-        if fn.endswith('.json'):
-            os.remove(os.path.join(solution_tasks_dir, fn))
-    docs_dir = os.path.join(AIDEV_PACKAGE_DIR, 'workflow', 'docs')
-    for fn in os.listdir(docs_dir):
-        if fn.endswith('.md'):
-            os.remove(os.path.join(docs_dir, fn))
-
     sonar = SonarClient(project.project_name)
     if not sonar.get_issues():
         print(f'Analyzing the project with SonarQube')
