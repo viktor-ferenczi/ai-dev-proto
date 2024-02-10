@@ -15,36 +15,48 @@
 
 
 {% if source.relevant_generation %}
-<details>
-    <summary>Relevant code identification</summary>
-    {% set generation = source.relevant_generation %}
-    {% include 'generation.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Relevant code identification</summary>
+        {% set generation = source.relevant_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
 {% endif %}
 
 
 {% if source.patch_generation %}
-<details>
-    <summary>Patch generation</summary>
-    {% set generation = source.patch_generation %}
-    {% include 'generation.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Patch generation</summary>
+        {% set generation = source.patch_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
 {% endif %}
 
 
 {% if source.patch %}
-<details>
-    <summary>Patch</summary>
-    {% set patch = source.patch %}
-    {% include 'patch.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Patch</summary>
+        {% set patch = source.patch %}
+        {% include 'patch.jinja' with context %}
+    </details>
 {% endif %}
 
 
 {% if source.implementation %}
-<details>
-    <summary>Implementation</summary>
-    {% set document = source.implementation %}
-    {% include 'document.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Implementation</summary>
+        {% set document = source.implementation %}
+        {% include 'document.jinja' with context %}
+    </details>
 {% endif %}
