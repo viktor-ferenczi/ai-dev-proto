@@ -28,7 +28,7 @@ def walk_children(cursor: TreeCursor, depth=0, *, max_depth=30) -> Iterator[Tree
 def walk_nodes(cursor: TreeCursor, *, max_depth: int = 30, debug: bool = False, log_multiline: bool = False) -> Iterator[Tuple[Node, int, int]]:
     for cur, depth in walk_children(cursor, max_depth=max_depth):
         node: Node = cur.node
-        lineno = 1 + node.start_point[0]
+        lineno = node.start_point[0]
         if debug and node.type.strip():
             text = decode_normalize(node.text).rstrip()
             if '\n' in text and not log_multiline:

@@ -1,20 +1,15 @@
-import json
 import os
 import re
 import traceback
-from typing import Set, Optional
-
-from pydantic import BaseModel
+from typing import Set
 
 from .model import Solution, Task
 from .model import TaskState, Source, Generation, GenerationState, SourceState, Feedback
 from .working_copy import WorkingCopy
-from ..code_map.model import Graph, Symbol, Category
+from ..code_map.model import Graph, Category, Symbol
 from ..code_map.parsers import detect_parser
-from ..common.async_helpers import AsyncPool
-from ..common.config import C
-from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
-from ..editing.model import Patch
+from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
+from ..editing.model import Patch, Block, Hunk
 from ..engine.params import GenerationParams, Constraint
 
 SYSTEM_CODING_ASSISTANT = '''\
@@ -59,9 +54,7 @@ class TaskProcessor:
                 if task.state == TaskState.FAILED:
                     return
 
-                # self.dump_task()
-                # await self.plan_task()
-                # self.dump_task()
+                self.dump_task()
 
             if task.state == TaskState.CODING:
                 await self.code_task()
@@ -152,10 +145,10 @@ class TaskProcessor:
         task = self.task
 
         instruction = render_workflow_template(
-            'relevant_symbols',
+            'find_relevant_symbols',
             task=task,
         )
-        constraint = Constraint.from_regex(r'(```\n(.*?\n)+```|Found no relevant symbols.)\n')
+        constraint = Constraint.from_regex(r'(?:```\n(.*?\n)+```|Found no relevant symbols.)\n')
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
@@ -170,23 +163,28 @@ class TaskProcessor:
 
         names: Set[str] = set()
         for code_block in extract_code_blocks(completion):
-            names.update(name.strip() for name in code_block)
+            names.update(name.strip() for name in code_block.split('\n'))
 
         # Symbols extracted by the model
         allowed_categories = {Category.NAMESPACE, Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.VARIABLE}
         symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category in allowed_categories}
+        print(f'Symbols mentioned in the task description: {sorted(s.id for s in symbols)!r}')
 
         # Relative paths mentioned by the task
-        paths = {
+        paths: Set[str] = {
             path
             for path in task.paths
             if path in task.description
         }
-        symbols.update(
+        print(f'Paths mentioned in the task description: {sorted(paths)!r}')
+
+        symbols_from_files: Set[Symbol] = set()
+        symbols_from_files.update(
             symbol
             for symbol in task.code_map.symbols.values()
             if symbol.category == Category.SOURCE and symbol.path in paths
         )
+        print(f'Symbols from files (currently ignored): {sorted(s.id for s in symbols_from_files)!r}')
 
         if not names and not paths:
             task.state = TaskState.FAILED
@@ -195,115 +193,29 @@ class TaskProcessor:
 
         # Find all dependencies
         for symbol in list(symbols):
-            symbols.update(task.code_map.symbols[id] for id in task.code_map.relations[symbol.id])
+            dependencies: Set[Symbol] = {task.code_map.symbols[id] for id in task.code_map.relations[symbol.id]}
+            print(f'Dependencies of {symbol.id}: {sorted(s.id for s in dependencies)!r}')
             symbols.update(s for r, s in task.code_map.iter_related(symbol) if s.category in allowed_categories)
 
         task.relevant_symbols = sorted(symbol.id for symbol in symbols)
+
+        unique_paths = {symbol.path for symbol in symbols}
         task.sources = [
-            Source.from_file(self.wc.project_dir, symbol.path)
-            for symbol in symbols
+            Source.from_file(self.wc.project_dir, path)
+            for path in unique_paths
         ]
 
-    async def plan_task(self, source_lines: dict[str, list[str]]):
-        task = self.task
-
-        task.planning_generations = []
-
-        class PlanResponse(BaseModel):
-            state: str
-            names: list[str]
-
-        response_schema = PlanResponse.model_json_schema()
-
-        symbols: Set[Symbol] = set()
-        plan: Optional[str] = None
-
-        for _ in range(C.MAX_PLANNING_STEPS):
-
-            facts = [join_lines(source_lines[symbol.path][symbol.block.begin:symbol.block.end]) for symbol in symbols]
-
-            instruction = render_workflow_template(
-                'plan',
-                task=task,
-                facts=facts,
-                response_schema=response_schema,
-            )
-            constraint = Constraint.from_regex(r'Step-by-step plan to implement the TASK:\n\n.*\n\n```\n\{"state": "(INCOMPLETE|READY)", "names": (\[\]|\[".*?"\]|\[".*?"(?:, ".*?")+\])\}\n```\n')
-            params = GenerationParams(max_tokens=2000, temperature=self.temperature, constraint=constraint)
-            gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
-            task.planning_generations.append(gen)
-            await gen.wait()
-
-            if gen.state == GenerationState.FAILED:
-                task.state = TaskState.FAILED
-                task.error = f'Failed to plan the implementation:\n\n{gen.error}'
-                return
-
-            completion = gen.completions[0]
-            parts = completion.rsplit('\n```\n', 2)
-
-            if len(parts) != 3:
-                task.state = TaskState.FAILED
-                task.error = f'The plan does not end in a code block'
-                return
-
-            if parts[-1].strip():
-                task.state = TaskState.FAILED
-                task.error = f'Trailing garbage in plan completion'
-                return
-
-            response = PlanResponse(**json.loads(parts[1]))
-
-            if response.state == 'READY':
-                plan = parts[0].strip()
-                break
-
-            if response.state != 'INCOMPLETE':
-                task.state = TaskState.FAILED
-                task.error = f'Invalid plan response state: {response.state}'
-                return
-
-            symbol_names_and_paths = {symbol.name for symbol in symbols}
-            symbol_names_and_paths.update(symbol.path for symbol in symbols)
-            new_names = [name for name in response.names if name not in symbol_names_and_paths]
-
-            if not new_names:
-                task.state = TaskState.FAILED
-                task.error = f'Incomplete plan with no new names requested'
-                return
-
-            for name in new_names:
-                for symbol in task.code_map.symbols.values():
-                    if symbol.block is None:
-                        continue
-                    if symbol.category == Category.SOURCE:
-                        if symbol.path == name:
-                            symbols.add(symbol)
-                    elif symbol.name == name:
-                        symbols.add(symbol)
-
-        if plan is None:
-            task.state = TaskState.FAILED
-            task.error = f'Failed to plan the implementation in {C.MAX_PLANNING_STEPS} steps'
-            return
-
-        task.plan = plan
-
-        selected_paths = {symbol.path for symbol in symbols}
-
-        for path in task.paths:
-            if path in task.description:
-                selected_paths.add(path)
-
-        if not selected_paths:
-            task.state = TaskState.FAILED
-            task.error = f'Found no relevant source files'
-            return
-
-        task.sources = [
-            Source.from_file(self.solution.folder, path)
-            for path in sorted(selected_paths)
-        ]
+        for source in task.sources:
+            symbols_in_source = {symbol for symbol in symbols if symbol.path == source.document.path}
+            blocks: list[Block] = sorted((symbol.block for symbol in symbols_in_source), key=lambda b: b.begin)
+            hunks: list[Hunk] = []
+            for block in blocks:
+                if not hunks or not block.is_overlapping(hunks[-1].block):
+                    hunk = Hunk.from_document(source.document, block)
+                    hunks.append(hunk)
+            patch = Patch.from_hunks(source.document, hunks)
+            patch.merge_hunks()
+            source.relevant = patch.hunks[0]
 
         task.state = TaskState.CODING
 
@@ -321,10 +233,10 @@ class TaskProcessor:
         )
 
         pattern = ''.join(
-            fr'(?:Path: `({re.escape(source.document.path)})`\n\n```{source.document.code_block_type}\n(.*?\n)*```\n\n)?'
+            fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(.*?\n)*```\n\n+'
             for source in task.sources
         )
-        constraint = Constraint.from_regex(pattern)
+        constraint = Constraint.from_regex(f'<MODIFIED-SOURCE-CODE>\n+{pattern}</MODIFIED-SOURCE-CODE>')
         params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
@@ -336,16 +248,23 @@ class TaskProcessor:
             task.error = f'Failed to implement the task'
             return
 
-        source_map = {source.path: source for source in task.sources}
-        for completion in gen.completions:
-            for m in re.finditer(pattern, completion):
-                path, code_block = m.groups()
-                replacement_lines = code_block.split('\n')
-                source = source_map[path]
-                source.relevant.replacement = replacement_lines
-                source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
-                source.implementation = source.patch.apply()
-                source.state = SourceState.COMPLETED
+        completion = gen.completions[0]
+
+        i = completion.find('<MODIFIED-SOURCE-CODE>')
+        j = completion.find('</MODIFIED-SOURCE-CODE>')
+        assert 0 <= i < j, f'Missing or wrong modified source block: i={i}, j={j}'
+        completion = completion[i + len('<MODIFIED-SOURCE-CODE>'):j].strip()
+
+        for source in task.sources:
+            path = source.document.path
+            assert f'Path: `{path}`' in completion, f'Missing path: {path}'
+
+        for source, code_block in zip(task.sources, extract_code_blocks(completion)):
+            replacement_lines = code_block.split('\n')
+            source.relevant.replacement = replacement_lines
+            source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
+            source.implementation = source.patch.apply()
+            source.state = SourceState.COMPLETED
 
         for source in task.sources:
             if source.state == SourceState.PENDING:

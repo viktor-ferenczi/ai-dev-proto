@@ -28,6 +28,19 @@
 {% endif %}
 
 
+{% if source.relevant %}
+
+    ---
+
+    <details>
+        <summary>Relevant code</summary>
+        {% set hunk = source.relevant %}
+        {% include 'hunk.jinja' with context %}
+    </details>
+
+{% endif %}
+
+
 {% if source.patch_generation %}
 
     ---

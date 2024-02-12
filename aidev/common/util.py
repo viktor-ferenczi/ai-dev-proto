@@ -11,7 +11,7 @@ from enum import Enum
 from logging import Logger, INFO, getLogger, StreamHandler, Formatter
 from typing import Iterable, List, Callable, Iterator, Awaitable, Any, Dict, Optional
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader, Template, StrictUndefined
 
 from .config import C
 
@@ -187,7 +187,10 @@ def render_template(_path: str, **variables) -> str:
     if not os.path.exists(_path):
         raise FileNotFoundError(f"The file {_path} does not exist.")
 
-    env = Environment(loader=FileSystemLoader(os.path.dirname(_path)))
+    env = Environment(
+        loader=FileSystemLoader(os.path.dirname(_path)),
+        undefined=StrictUndefined,
+    )
     template = env.get_template(os.path.basename(_path))
     return template.render(**variables)
 

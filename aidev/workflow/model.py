@@ -65,12 +65,15 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
+        print('Starting generation')
         try:
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
+            print('Failed generation')
             self.state = GenerationState.FAILED
             self.error = format_exc()
         else:
+            print('Finished generation')
             self.state = GenerationState.COMPLETED
 
     async def wait(self):
@@ -249,8 +252,14 @@ class Task(BaseModel):
         if not self.is_wip:
             return
 
+        if self.relevant_symbols_generation is not None:
+            yield self.relevant_symbols_generation
+
         if self.planning_generations is not None:
             yield from self.planning_generations
+
+        if self.patch_generation is not None:
+            yield self.patch_generation
 
         if self.feedback_generation is not None:
             yield self.feedback_generation

@@ -142,6 +142,7 @@ class Block(BaseModel):
     def is_inside(self, other: 'Block') -> bool:
         return self.begin >= other.begin and self.end <= other.end
 
+    # FIXME: This does not belong here
     def format_marker(self, doctype: DocType) -> str:
         formatter = {
             DocType.UNKNOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),

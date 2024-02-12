@@ -49,7 +49,7 @@ class CSharpParser(TreeSitterParser):
         cursor: TreeCursor = tree.walk()
         for node, lineno, depth in walk_nodes(cursor, debug=self.debug):
             last_lineno = lineno + node.text.count(b'\n')
-            block = Block.new(lineno, last_lineno + 1)
+            block = Block.from_range(lineno, last_lineno + 1)
 
             while ctx.last_lineno < lineno:
                 ctx = stack.pop()

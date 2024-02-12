@@ -2,8 +2,8 @@
 
 <INSTRUCTIONS>
 
-    Your job is to complete the TASK described by the TASK-DESCRIPTION by implementing changes to the SOURCE-CODE.
-    The SOURCE-CODE is part of a larger project, the relevant parts have already been extracted for you.
+    Your job is to complete the TASK described by the TASK-DESCRIPTION by implementing changes to the ORIGINAL-SOURCE-CODE.
+    The ORIGINAL-SOURCE-CODE is part of a larger project. You can see only the relevant parts of the code here.
 
     Please ALWAYS honor ALL of these rules specific to your current job:
 
@@ -18,6 +18,11 @@
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
 
+    Your RESPONSE must be enclosed in a MODIFIED-SOURCE-CODE block, similarly to ORIGINAL-SOURCE-CODE.
+    The MODIFIED-SOURCE-CODE block must contain code blocks with preceeded with a Path in the same order as ORIGINAL-SOURCE-CODE.
+    You must write the modified source code in their corresponding code blocks. Leave the code block empty to delete the file.
+    You cannot introduce new source code files.
+
 </INSTRUCTIONS>
 
 <TASK-DESCRIPTION>
@@ -26,7 +31,7 @@
 
 </TASK-DESCRIPTION>
 
-<SOURCE-CODE>
+<ORIGINAL-SOURCE-CODE>
 
     {% for source in task.sources %}
 
@@ -38,6 +43,6 @@
 
     {% endfor %}
 
-</SOURCE-CODE>
+</ORIGINAL-SOURCE-CODE>
 
-Take a deep breath and implement the changes to the SOURCE-CODE required to accomplish the TASK.
+Take a deep breath and write your RESPONSE implementing the changes to the original source code required to accomplish the TASK.

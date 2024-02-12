@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from aidev.common.config import C
 from aidev.common.util import SimpleEnum
+from aidev.editing.model import Block
 
 Identifier: TypeAlias = str
 
@@ -71,22 +72,6 @@ OPPOSITE_RELATIONS = {
     Relation.USES: Relation.USED_BY,
     Relation.USED_BY: Relation.USES,
 }
-
-
-class Block(BaseModel):
-    """Represent a block of consequtive lines of source code
-    """
-    begin: int
-    """Zero-based index of the first line of the block (one less than line number)"""
-
-    end: int
-    """Zero-based index of the first line after the block (one less than line number)"""
-
-    @classmethod
-    def new(cls, begin: int, end: int) -> 'Block':
-        if not (0 <= begin <= end):
-            raise ValueError(f'Invalid block range: begin={begin}, end={end}')
-        return cls(begin=begin, end=end)
 
 
 class Symbol(BaseModel):
