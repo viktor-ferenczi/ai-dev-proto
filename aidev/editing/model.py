@@ -199,7 +199,11 @@ class Document(BaseModel):
 
     @property
     def code_block(self) -> str:
-        return f'```{self.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
+        return f'```{self.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
+
+    @property
+    def code_block_type(self) -> str:
+        return self.doctype.code_block_type
 
     @property
     def code_block_lines(self) -> list[str]:

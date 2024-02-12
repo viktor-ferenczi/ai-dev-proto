@@ -84,6 +84,19 @@
 {% endif %}
 
 
+{% if task.patch_generation %}
+
+    ---
+
+    <details>
+        <summary>Patch generation</summary>
+        {% set generation = task.patch_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+
+{% endif %}
+
+
 {% if task.feedback_generation %}
 
     ---

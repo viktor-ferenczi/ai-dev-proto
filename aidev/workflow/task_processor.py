@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import traceback
 from typing import Set, Optional
 
@@ -12,7 +13,7 @@ from ..code_map.model import Graph, Symbol, Category
 from ..code_map.parsers import detect_parser
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
-from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, decode_normalize
+from ..common.util import render_workflow_template, regex_from_lines, extract_code_blocks, join_lines, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
 from ..editing.model import Patch
 from ..engine.params import GenerationParams, Constraint
 
@@ -314,27 +315,41 @@ class TaskProcessor:
             task.error = f'No source files to change'
             return
 
-        async with AsyncPool() as pool:
-            for source in task.sources:
-                pool.run(self.process_source(source))
+        instruction = render_workflow_template(
+            'implement_task',
+            task=task,
+        )
 
-            while pool:
-                await pool.wait()
-                self.dump_task()
+        pattern = ''.join(
+            fr'(?:Path: `({re.escape(source.document.path)})`\n\n```{source.document.code_block_type}\n(.*?\n)*```\n\n)?'
+            for source in task.sources
+        )
+        constraint = Constraint.from_regex(pattern)
+        params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
+        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
-        failed_sources = []
-        for source in task.sources:
-            if source.state == SourceState.FAILED:
-                failed_sources.append(source)
-        if failed_sources:
+        task.patch_generation = gen
+        await gen.wait()
+
+        if gen.state == GenerationState.FAILED:
             task.state = TaskState.FAILED
-            task.error = join_lines(
-                ['Failed to change source file(s):'] +
-                [source.document.path for source in failed_sources]
-            )
+            task.error = f'Failed to implement the task'
             return
 
-        self.dump_task()
+        source_map = {source.path: source for source in task.sources}
+        for completion in gen.completions:
+            for m in re.finditer(pattern, completion):
+                path, code_block = m.groups()
+                replacement_lines = code_block.split('\n')
+                source = source_map[path]
+                source.relevant.replacement = replacement_lines
+                source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
+                source.implementation = source.patch.apply()
+                source.state = SourceState.COMPLETED
+
+        for source in task.sources:
+            if source.state == SourceState.PENDING:
+                source.state = SourceState.SKIP
 
         assert all(source.state in (SourceState.COMPLETED, SourceState.SKIP) for source in task.sources), 'Invalid source states'
 
@@ -344,94 +359,6 @@ class TaskProcessor:
             return
 
         task.state = TaskState.TESTING
-
-    async def process_source(self, source: Source):
-        task = self.task
-
-        if source.relevant is None:
-            await self.find_relevant_code(source)
-            if source.state != SourceState.PENDING or not task.is_wip:
-                return
-
-        if source.implementation is None:
-            await self.implement_task_in_source(source)
-            if source.state != SourceState.PENDING or not task.is_wip:
-                return
-
-        source.state = SourceState.COMPLETED
-
-    async def find_relevant_code(self, source: Source):
-        task = self.task
-
-        instruction = render_workflow_template(
-            'find_relevant_code',
-            task=task,
-            source=source.document.code_block,
-        )
-
-        code_block_type = source.document.doctype.code_block_type
-        constraint = Constraint.from_regex(f'```{code_block_type}\n{regex_from_lines(source.document.lines)}```\n')
-        params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
-
-        source.relevant_generation = gen
-        await gen.wait()
-
-        if gen.state == GenerationState.FAILED:
-            source.state = SourceState.FAILED
-            source.error = f'Failed to find relevant code lines'
-            return
-
-        for completion in gen.completions:
-            try:
-                patch = Patch.from_completion(source.document, completion)
-            except ValueError:
-                continue
-            if patch.hunks:
-                break
-        else:
-            # Found no relevant code lines
-            source.state = SourceState.SKIP
-            return
-
-        patch.merge_hunks()
-        source.relevant = patch.hunks[0]
-
-    async def implement_task_in_source(self, source: Source):
-        task = self.task
-
-        instruction = render_workflow_template(
-            'implement_task',
-            task=task,
-            source=source.relevant.code_block,
-        )
-
-        code_block_type = source.document.doctype.code_block_type
-        constraint = Constraint.from_regex(f'```{code_block_type}\n(.*?\n)*```\n')
-        params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
-
-        source.patch_generation = gen
-        await gen.wait()
-
-        if gen.state == GenerationState.FAILED:
-            source.state = SourceState.FAILED
-            source.error = f'Failed to implement the task'
-            return
-
-        for completion in gen.completions:
-            code_blocks = extract_code_blocks(completion)
-            if code_blocks:
-                replacement_lines = code_blocks[-1].split('\n')
-                break
-        else:
-            source.state = SourceState.FAILED
-            source.error = 'Empty implementation'
-            return
-
-        source.relevant.replacement = replacement_lines
-        source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
-        source.implementation = source.patch.apply()
 
     async def build_and_test_task(self):
         task = self.task

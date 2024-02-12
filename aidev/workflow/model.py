@@ -219,6 +219,9 @@ class Task(BaseModel):
     sources: Optional[list[Source]] = None
     """Source files that need to be modified, extended during planning"""
 
+    patch_generation: Optional[Generation] = None
+    """Text generation to actually implement the change to one or more source code hunks at the same time"""
+
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""
 
