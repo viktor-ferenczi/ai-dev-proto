@@ -27,20 +27,20 @@ class CSharpParser(TreeSitterParser):
     mime_types = ('text/x-csharp',)
     tree_sitter_language_name = 'c_sharp'
 
-    def collect(self, graph: Graph, path: str, tree: Tree):
+    def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
         source_basename = os.path.basename(path)
         source_name = os.path.splitext(source_basename)[0]
-        source = Symbol.new(path, Category.SOURCE, name=source_name)
+        source = Symbol.new(path, Category.SOURCE, Block.from_range(0, file_line_count), source_name)
         graph.add_symbol(source)
 
-        ctx: Context = Context.new(source, Relation.PARENT, 999999999)
+        ctx: Context = Context.new(source, Relation.PARENT, file_line_count - 1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
         stack: list[Context] = []
 
         def push(c: Context):
             nonlocal ctx
-            assert c.last_lineno <= ctx.last_lineno, 'Invalid context blocks'
+            assert c.last_lineno <= ctx.last_lineno, f'Invalid context blocks: {c.last_lineno} > {ctx.last_lineno}'
             stack.append(ctx)
             ctx = c
             if self.debug:

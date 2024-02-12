@@ -14,6 +14,7 @@
     - UPDATE any existing comments related to the TASK to match the modified code.
     - Remove existing comments ONLY if they are invalidated by implementing the TASK.
     - NEVER use placeholders, ALWAYS write out the full code.
+    - Reproduce the code with the appropriate modifications from the `//START` marker to the `//FINISH` marker.
     - PRESERVE code lines containing {MARKER_NAME}, even if they don't seem to relate to the logic.
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
@@ -38,7 +39,7 @@
         {% set doc = source.document %}
         {% set hunk = source.relevant %}
         {% set path = doc.path %}
-        {% set code_block = hunk.code_block %}
+        {% set code_block = hunk.code_block_start_finish %}
         {% include 'code_block.jinja' with context %}
 
     {% endfor %}

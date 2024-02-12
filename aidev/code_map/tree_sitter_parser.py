@@ -17,7 +17,8 @@ class TreeSitterParser(BaseParser):
         parser = Parser()
         parser.set_language(self.tree_sitter_language)
         tree: Tree = parser.parse(content)
-        self.collect(graph, path, tree)
+        file_line_count = 1 + content.count(b'\n')
+        self.collect(graph, path, tree, file_line_count)
 
-    def collect(self, graph: Graph, path: str, tree: Tree):
+    def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
         raise NotImplementedError()

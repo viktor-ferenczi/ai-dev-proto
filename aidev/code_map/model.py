@@ -96,7 +96,7 @@ class Symbol(BaseModel):
         return hash(self.id)
 
     @classmethod
-    def new(cls, path: str, category: Category, block: Optional[Block] = None, name: Optional[str] = None) -> 'Symbol':
+    def new(cls, path: str, category: Category, block: Optional[Block], name: Optional[str] = None) -> 'Symbol':
         block_signature = '' if block is None else f'#{block.begin}:{block.end}'
         id = f'{path}{block_signature}|{category}|{name or ""}'
         if C.HASH_SYMBOL_IDS:

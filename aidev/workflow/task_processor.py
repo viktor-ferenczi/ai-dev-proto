@@ -13,7 +13,7 @@ from ..editing.model import Patch, Block, Hunk
 from ..engine.params import GenerationParams, Constraint
 
 SYSTEM_CODING_ASSISTANT = '''\
-You are a helpful coding assistant experienced in C#, .NET Core., HTML, JavaScript and Python.
+You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.
 '''
 
 
@@ -176,7 +176,7 @@ class TaskProcessor:
             for path in task.paths
             if path in task.description
         }
-        print(f'Paths mentioned in the task description: {sorted(paths)!r}')
+        print(f'Source paths mentioned in the task description: {sorted(paths)!r}')
 
         symbols_from_files: Set[Symbol] = set()
         symbols_from_files.update(
@@ -184,7 +184,8 @@ class TaskProcessor:
             for symbol in task.code_map.symbols.values()
             if symbol.category == Category.SOURCE and symbol.path in paths
         )
-        print(f'Symbols from files (currently ignored): {sorted(s.id for s in symbols_from_files)!r}')
+        print(f'Symbols from source paths mentioned in the task description: {sorted(s.id for s in symbols_from_files)!r}')
+        symbols.update(symbols_from_files)
 
         if not names and not paths:
             task.state = TaskState.FAILED
@@ -236,7 +237,7 @@ class TaskProcessor:
             fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(.*?\n)*```\n\n+'
             for source in task.sources
         )
-        constraint = Constraint.from_regex(f'<MODIFIED-SOURCE-CODE>\n+{pattern}</MODIFIED-SOURCE-CODE>')
+        constraint = Constraint.from_regex(rf'<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
         params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
@@ -251,9 +252,11 @@ class TaskProcessor:
         completion = gen.completions[0]
 
         i = completion.find('<MODIFIED-SOURCE-CODE>')
-        j = completion.find('</MODIFIED-SOURCE-CODE>')
+        j = completion.rfind('</MODIFIED-SOURCE-CODE>')
         assert 0 <= i < j, f'Missing or wrong modified source block: i={i}, j={j}'
         completion = completion[i + len('<MODIFIED-SOURCE-CODE>'):j].strip()
+        completion = completion.replace('<MODIFIED-SOURCE-CODE>', '')
+        completion = completion.replace('</MODIFIED-SOURCE-CODE>', '')
 
         for source in task.sources:
             path = source.document.path
@@ -261,6 +264,9 @@ class TaskProcessor:
 
         for source, code_block in zip(task.sources, extract_code_blocks(completion)):
             replacement_lines = code_block.split('\n')
+            assert replacement_lines[0] == '//START'
+            assert replacement_lines[-1] == '//FINISH'
+            replacement_lines = replacement_lines[1:-1]
             source.relevant.replacement = replacement_lines
             source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
             source.implementation = source.patch.apply()

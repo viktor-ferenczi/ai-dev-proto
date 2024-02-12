@@ -58,7 +58,7 @@ def load_book() -> str:
 BOOK = load_book()
 
 SYSTEM_CODING_ASSISTANT = '''\
-You are a helpful coding assistant experienced in C#, .NET Core., HTML, JavaScript and Python.
+You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.
 '''
 
 INSTRUCTION_DEDUPLICATE_FILES = '''\
