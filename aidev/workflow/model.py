@@ -204,6 +204,12 @@ class Task(BaseModel):
     code_map: Optional[Graph] = None
     """Code map constructed from parsing all the source files before making any changes"""
 
+    relevant_symbols_generation: Optional[Generation] = None
+    """Text generation used to extract the name of relevant symbols from the task description"""
+
+    relevant_symbols: Optional[list[str]] = None
+    """List of the IDs of the relevant symbols required to work on the task"""
+
     planning_generations: Optional[list[Generation]] = None
     """Text generations used for planning the implementation"""
 

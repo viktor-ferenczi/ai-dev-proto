@@ -43,17 +43,24 @@ class TaskProcessor:
             self.dump_task()
 
             if task.state == TaskState.PLANNING:
+
+                # FIXME: Produce only once for each git hash
                 await self.find_source_files()
                 if task.state == TaskState.FAILED:
                     return
 
-                source_lines = await self.build_code_map()
+                # FIXME: Produce only once for each git hash
+                await self.build_code_map()
                 if task.state == TaskState.FAILED:
                     return
 
-                self.dump_task()
-                await self.plan_task(source_lines)
-                self.dump_task()
+                await self.find_relevant_sources()
+                if task.state == TaskState.FAILED:
+                    return
+
+                # self.dump_task()
+                # await self.plan_task()
+                # self.dump_task()
 
             if task.state == TaskState.CODING:
                 await self.code_task()
@@ -122,12 +129,11 @@ class TaskProcessor:
 
         task.paths = paths
 
-    async def build_code_map(self) -> dict[str, list[str]]:
+    async def build_code_map(self):
         task = self.task
         wc = self.wc
 
         graph = Graph.new()
-        source_lines: dict[str, list[str]] = {}
 
         assert isinstance(wc, WorkingCopy)
         for path in task.paths:
@@ -138,10 +144,64 @@ class TaskProcessor:
             parser = parser_cls()
             content = read_binary_file(full_path)
             parser.parse(graph, path, content)
-            source_lines[path] = decode_normalize(content).split('\n')
 
         task.code_map = graph
-        return source_lines
+
+    async def find_relevant_sources(self):
+        task = self.task
+
+        instruction = render_workflow_template(
+            'relevant_symbols',
+            task=task,
+        )
+        constraint = Constraint.from_regex(r'(```\n(.*?\n)+```|Found no relevant symbols.)\n')
+        params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
+        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        task.relevant_symbols_generation = gen
+        await gen.wait()
+
+        if gen.state == GenerationState.FAILED:
+            task.state = TaskState.FAILED
+            task.error = f'Failed to find the relevant symbols:\n\n{gen.error}'
+            return
+
+        completion = gen.completions[0]
+
+        names: Set[str] = set()
+        for code_block in extract_code_blocks(completion):
+            names.update(name.strip() for name in code_block)
+
+        # Symbols extracted by the model
+        allowed_categories = {Category.NAMESPACE, Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.VARIABLE}
+        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category in allowed_categories}
+
+        # Relative paths mentioned by the task
+        paths = {
+            path
+            for path in task.paths
+            if path in task.description
+        }
+        symbols.update(
+            symbol
+            for symbol in task.code_map.symbols.values()
+            if symbol.category == Category.SOURCE and symbol.path in paths
+        )
+
+        if not names and not paths:
+            task.state = TaskState.FAILED
+            task.error = f'Could not narrow down the symbols to work on based on the task description'
+            return
+
+        # Find all dependencies
+        for symbol in list(symbols):
+            symbols.update(task.code_map.symbols[id] for id in task.code_map.relations[symbol.id])
+            symbols.update(s for r, s in task.code_map.iter_related(symbol) if s.category in allowed_categories)
+
+        task.relevant_symbols = sorted(symbol.id for symbol in symbols)
+        task.sources = [
+            Source.from_file(self.wc.project_dir, symbol.path)
+            for symbol in symbols
+        ]
 
     async def plan_task(self, source_lines: dict[str, list[str]]):
         task = self.task
@@ -245,21 +305,6 @@ class TaskProcessor:
         ]
 
         task.state = TaskState.CODING
-
-    async def find_relevant_sources_in_chunk(self, chunk: list[str], n: int) -> Generation:
-        task = self.task
-
-        instruction = render_workflow_template(
-            'find_relevant_sources',
-            task=task,
-            paths=join_lines(['```'] + chunk + ['```']),
-        )
-        constraint = Constraint.from_regex(rf'```\n{regex_from_lines(chunk)}```\n')
-        params = GenerationParams(n=n, max_tokens=4000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
-        task.source_selection_generations.append(gen)
-        await gen.wait()
-        return gen
 
     async def code_task(self):
         task = self.task

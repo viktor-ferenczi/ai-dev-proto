@@ -1,0 +1,36 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to identify the SYMBOLS while may need to be used or changed while implementing the TASK-DESCRIPTION below.
+    Do NOT implement the TASK-DESCRIPTION, your job is limited only to identifying the relevant SYMBOLS.
+
+    A relevant symbol is one of:
+    - Namespace
+    - Interface
+    - Class
+    - Struct
+    - Record
+    - Method
+    - Member variable
+    - Local variable
+
+    Identify only SYMBOLS with meaningful names, e.g. ignore anything too short and generic like `i` or `j`.
+
+    Your RESPONSE must be a single text block listing only the names of the relevant SYMBOLS, each one on a separate line.
+
+    If you do not find any relevant SYMBOLS in the TASK-DESCRIPTION, then respond "Found no relevant symbols." and nothing else.
+
+    Please ALWAYS honor ALL of these rules specific to your current job:
+    - Do NOT come up with any new SYMBOLS, only use the ones mentioned in the TASK-DESCRIPTION.
+    - Do NOT implement the TASK-DESCRIPTION, only extract the relevant SYMBOLS.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task.description }}
+
+</TASK-DESCRIPTION>
+
+Now take a deep breath and write your RESPONSE block:

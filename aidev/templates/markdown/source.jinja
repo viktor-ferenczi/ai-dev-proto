@@ -11,6 +11,7 @@
         {% set error = source.error %}
         {% include 'error.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -23,6 +24,7 @@
         {% set generation = source.relevant_generation %}
         {% include 'generation.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -35,6 +37,7 @@
         {% set generation = source.patch_generation %}
         {% include 'generation.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -47,6 +50,7 @@
         {% set patch = source.patch %}
         {% include 'patch.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -59,4 +63,5 @@
         {% set document = source.implementation %}
         {% include 'document.jinja' with context %}
     </details>
+
 {% endif %}

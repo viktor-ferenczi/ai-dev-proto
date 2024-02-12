@@ -51,6 +51,20 @@
             </details>
         {% endfor %}
     </details>
+
+{% endif %}
+
+
+{% if task.relevant_symbols_generation %}
+
+    ---
+
+    <details>
+        <summary>Relvant symbols generation</summary>
+        {% set generation = task.relevant_symbols_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+
 {% endif %}
 
 
@@ -79,6 +93,7 @@
         {% set generation = task.feedback_generation %}
         {% include 'generation.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -91,6 +106,7 @@
         <summary>Feedback on {{ feedback.critic }} error</summary>
         {% include 'feedback.jinja' with context %}
     </details>
+
 {% endif %}
 
 
@@ -104,5 +120,6 @@
             {% include 'feedback.jinja' with context %}
         {% endfor %}
     </details>
+
 {% endif %}
 
