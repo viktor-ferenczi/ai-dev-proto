@@ -148,7 +148,7 @@ class TaskProcessor:
             'find_relevant_symbols',
             task=task,
         )
-        constraint = Constraint.from_regex(r'(?:```\n(.*?\n)+```|Found no relevant symbols.)\n')
+        constraint = Constraint.from_regex(r'(?:```\n(\n|[^`].*?\n)+```|Found no relevant symbols.)\n')
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
@@ -234,7 +234,7 @@ class TaskProcessor:
         )
 
         pattern = ''.join(
-            fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(.*?\n)*```\n\n+'
+            fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(\n|[^`].*?\n)*```\n\n+'
             for source in task.sources
         )
         constraint = Constraint.from_regex(rf'<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
