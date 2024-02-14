@@ -17,14 +17,6 @@
 
     - PR: {{ task.state }}
 
-    {% if task.error %}
-        <details open>
-            <summary>Error</summary>
-            {% set error = task.error %}
-            {% include 'error.jinja' with context %}
-        </details>
-    {% endif %}
-
 </details>
 
 <details open>
@@ -33,6 +25,15 @@
     {{ task.description }}
 
 </details>
+
+
+{% if task.error %}
+    <details open>
+        <summary>Error</summary>
+        {% set error = task.error %}
+        {% include 'error.jinja' with context %}
+    </details>
+{% endif %}
 
 
 {% if task.planning_generations %}

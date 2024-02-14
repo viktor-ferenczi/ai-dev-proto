@@ -17,8 +17,13 @@
 
     Identify only SYMBOLS with meaningful names, e.g. ignore anything too short and generic like `i` or `j`.
 
-    Your RESPONSE must either a single text block listing only the names of the relevant SYMBOLS
-    (each one on a separate line) or the exact sentence "Found no relevant symbols." and nothing else.
+    Your RESPONSE must be JSON according to this schema:
+
+    ```jsonschema
+    {{ schema }}
+    ```
+
+    The `symbols` field must contain the names of the relevant SYMBOLS in any order.
 
     Please ALWAYS honor ALL of these rules specific to your current job:
     - Do NOT come up with any new SYMBOLS, only use the ones mentioned in the TASK-DESCRIPTION.

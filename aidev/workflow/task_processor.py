@@ -1,7 +1,10 @@
+import json
 import os
 import re
 import traceback
 from typing import Set
+
+from pydantic import BaseModel
 
 from .model import Solution, Task
 from .model import TaskState, Source, Generation, GenerationState, SourceState, Feedback
@@ -144,11 +147,17 @@ class TaskProcessor:
     async def find_relevant_sources(self):
         task = self.task
 
+        class Response(BaseModel):
+            symbols: list[str]
+
+        schema = Response.model_json_schema()
+
         instruction = render_workflow_template(
             'find_relevant_symbols',
             task=task,
+            schema=schema,
         )
-        constraint = Constraint.from_regex(r'(?:```\n(\n|[^`].*?\n)+```|Found no relevant symbols.)\n')
+        constraint = Constraint.from_json_schema(schema)
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
@@ -162,8 +171,7 @@ class TaskProcessor:
         completion = gen.completions[0]
 
         names: Set[str] = set()
-        for code_block in extract_code_blocks(completion):
-            names.update(name.strip() for name in code_block.split('\n'))
+        names.update(json.loads(completion)['symbols'])
 
         # Symbols extracted by the model
         allowed_categories = {Category.NAMESPACE, Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.VARIABLE}
