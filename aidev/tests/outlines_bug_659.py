@@ -75,7 +75,7 @@ Take a deep breath and write your RESPONSE.
 ### Response:
 '''.lstrip().replace('TRIPPLE_BACKTICK', TRIPPLE_BACKTICK)
 
-REGEX = r'<MODIFIED-SOURCE-CODE>\n\n+Path: `S\.D/M/Some\.cs`\n\n+TRIPPLE_BACKTICKcs\n(.*?\n)*TRIPPLE_BACKTICK\n\n+</MODIFIED-SOURCE-CODE>\n'.replace('TRIPPLE_BACKTICK', TRIPPLE_BACKTICK)
+REGEX = r'<MODIFIED-SOURCE-CODE>\n\n+Path: `S\.D/M/Some\.cs`\n\n+TRIPPLE_BACKTICKcs\n(\n|[^`].*?\n)*TRIPPLE_BACKTICK\n\n+</MODIFIED-SOURCE-CODE>\n'.replace('TRIPPLE_BACKTICK', TRIPPLE_BACKTICK)
 
 PAYLOAD = json.loads(r'''{
   "prompt": "PROMPT",
