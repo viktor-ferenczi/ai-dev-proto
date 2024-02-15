@@ -9,10 +9,10 @@ from pydantic import BaseModel
 from .model import Solution, Task
 from .model import TaskState, Source, Generation, GenerationState, SourceState, Feedback
 from .working_copy import WorkingCopy
-from ..code_map.model import Graph, Category, Symbol
+from ..code_map.model import Graph, Category, Symbol, Relation
 from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
-from ..editing.model import Patch, Block, Hunk
+from ..editing.model import Patch, Block, Hunk, MARKER_NAME
 from ..engine.params import GenerationParams, Constraint
 
 SYSTEM_CODING_ASSISTANT = '''\
@@ -176,61 +176,76 @@ class TaskProcessor:
 
         completion = gen.completions[0]
 
-        names: Set[str] = set()
-        names.update(json.loads(completion)['symbols'])
+        names: Set[str] = set(json.loads(completion)['symbols'])
+        # print(f'names = {names}')
 
-        # Symbols extracted by the model
-        allowed_categories = {Category.NAMESPACE, Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.VARIABLE}
-        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category in allowed_categories}
-        print(f'Symbols mentioned in the task description: {sorted(s.id for s in symbols)!r}')
+        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category != Category.IDENTIFIER}
+        # print(f'symbols = {symbols}')
 
-        # Relative paths mentioned by the task
         paths: Set[str] = {
             path
             for path in task.paths
             if path in task.description
         }
-        print(f'Source paths mentioned in the task description: {sorted(paths)!r}')
+        # print(f'paths = {paths}')
 
-        symbols_from_files: Set[Symbol] = set()
-        symbols_from_files.update(
-            symbol
-            for symbol in task.code_map.symbols.values()
-            if symbol.category == Category.SOURCE and symbol.path in paths
-        )
-        print(f'Symbols from source paths mentioned in the task description: {sorted(s.id for s in symbols_from_files)!r}')
-        symbols.update(symbols_from_files)
+        dependent_symbols: Set[Symbol] = set()
+        for symbol in symbols:
+            # print(f'? symbol = {symbol}')
+            for relation, used_by in task.code_map.iter_related(symbol):
+                if relation == Relation.USED_BY:
+                    # print(f'=> used_by = {used_by}')
+                    dependent_symbols.add(used_by)
+        # print(f'dependent_symbols = {dependent_symbols}')
 
-        if not names and not paths:
+        symbols.update(dependent_symbols)
+        paths.update(symbol.path for symbol in symbols)
+        # print(f'symbols = {symbols}')
+        # print(f'paths = {paths}')
+
+        if not symbols or not paths:
             task.state = TaskState.FAILED
-            task.error = f'Could not narrow down the symbols to work on based on the task description'
+            task.error = f'Could not narrow down the symbols and files to work on based on the task description'
             return
 
-        # Find all dependencies
-        for symbol in list(symbols):
-            dependencies: Set[Symbol] = {task.code_map.symbols[id] for id in task.code_map.relations[symbol.id]}
-            print(f'Dependencies of {symbol.id}: {sorted(s.id for s in dependencies)!r}')
-            symbols.update(s for r, s in task.code_map.iter_related(symbol) if s.category in allowed_categories)
-
         task.relevant_symbols = sorted(symbol.id for symbol in symbols)
-
-        unique_paths = {symbol.path for symbol in symbols}
         task.sources = [
             Source.from_file(self.wc.project_dir, path)
-            for path in unique_paths
+            for path in paths
         ]
 
+        relevant_symbol_ids = set(task.relevant_symbols)
         for source in task.sources:
-            symbols_in_source = {symbol for symbol in symbols if symbol.path == source.document.path}
-            blocks: list[Block] = sorted((symbol.block for symbol in symbols_in_source), key=lambda b: b.begin)
-            hunks: list[Hunk] = []
-            for block in blocks:
-                if not hunks or not block.is_overlapping(hunks[-1].block):
-                    hunk = Hunk.from_document(source.document, block)
-                    hunks.append(hunk)
-            patch = Patch.from_hunks(source.document, hunks)
-            patch.merge_hunks()
-            source.relevant = patch.hunks[0]
+            source_path = source.document.path
+            relevant_blocks: list[Block] = []
+            for symbol in task.code_map.symbols.values():
+                if symbol.path != source_path:
+                    continue
+                if symbol.category not in (Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.FUNCTION, Category.VARIABLE):
+                    continue
+                if relevant_symbol_ids & set(task.code_map.relations[symbol.id]):
+                    relevant_blocks.append(symbol.block)
+
+            if not relevant_blocks:
+                source.relevant = Hunk.from_document(source.document, Block.from_range(0, 1))
+            elif len(relevant_blocks) == 1:
+                source.relevant = Hunk.from_document(source.document, relevant_blocks[0])
+            else:
+                relevant_blocks.sort(key=lambda b: b.begin)
+                merged_blocks = [relevant_blocks[0]]
+                for b in relevant_blocks[1:]:
+                    last = merged_blocks[-1]
+                    if b.end <= last.end:
+                        continue
+                    if b.begin < last.end:
+                        merged_blocks.append(Block.from_range(last.end, b.end))
+                        continue
+                    merged_blocks.append(Block.from_range(b.begin, b.end))
+
+                hunks = [Hunk.from_document(source.document, b) for b in merged_blocks]
+                patch = Patch.from_hunks(source.document, hunks)
+                patch.merge_hunks()
+                source.relevant = patch.hunks[0]
 
         task.state = TaskState.CODING
 
@@ -245,17 +260,19 @@ class TaskProcessor:
         instruction = render_workflow_template(
             'implement_task',
             task=task,
+            MARKER_NAME=MARKER_NAME,
         )
 
         pattern = ''.join(
             fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(\n|[^`].*?\n)*```\n\n+'
             for source in task.sources
         )
-        constraint = Constraint.from_regex(rf'<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
-        params = GenerationParams(max_tokens=4000, temperature=self.temperature, constraint=constraint)
+        constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
+        params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
+        self.dump_task()
         await gen.wait()
 
         if gen.state == GenerationState.FAILED:

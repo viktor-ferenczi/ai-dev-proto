@@ -1,5 +1,5 @@
 from hashlib import sha1
-from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set
+from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set, Any
 
 from pydantic import BaseModel
 
@@ -103,6 +103,12 @@ class Symbol(BaseModel):
 
     def __hash__(self) -> int:
         return hash(self.id)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Symbol) and self.id == other.id
+
+    def __ne__(self, other: Any) -> bool:
+        return isinstance(other, Symbol) and self.id != other.id
 
     @classmethod
     def new(cls, path: str, category: Category, block: Optional[Block], name: Optional[str] = None) -> 'Symbol':

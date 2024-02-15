@@ -15,11 +15,18 @@
     - Remove existing comments ONLY if they are invalidated by implementing the TASK.
     - NEVER use placeholders, ALWAYS write out the full code.
     - Reproduce the code with the appropriate modifications from the `//START` marker to the `//FINISH` marker.
-    - PRESERVE code lines containing {MARKER_NAME}, even if they don't seem to relate to the logic.
+    - PRESERVE code lines containing {{ MARKER_NAME }}, even if they don't seem to relate to the logic.
+    - PRESERVE all code and comments not need to be changed to implement the TASK.
+    - MAKE SURE to change the code CONSISTENTLY. If you make changes to an interface, class, struct,
+      method or variable signature, then MAKE SURE to adjust ALL of its uses consistently!
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
 
-    Your RESPONSE must be enclosed in a MODIFIED-SOURCE-CODE block, similarly to ORIGINAL-SOURCE-CODE.
+    Your RESPONSE must be enclosed in an IMPLEMENTATION-PLAN block, followed by a MODIFIED-SOURCE-CODE block.
+
+    The IMPLEMENTATION-PLAN block must include a concise list of code changes required to implement the task.
+    Make sure to write down all the steps before modifying any of the source code.
+
     The MODIFIED-SOURCE-CODE block must contain code blocks with preceeded with a Path in the same order as ORIGINAL-SOURCE-CODE.
     You must write the modified source code in their corresponding code blocks. Leave the code block empty to delete the file.
     You cannot introduce new source code files.

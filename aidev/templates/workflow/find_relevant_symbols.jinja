@@ -25,6 +25,10 @@
 
     The `symbols` field must contain the names of the relevant SYMBOLS in any order.
 
+    EXCLUDE all the C# language, .NET Core, LINQ and standard library types, class, interface, function
+    and member variable names, like `IEnumerable`, `null` and others. We want only the names of the symbols
+    which are specific to the solution at hand and can be changed by the developer of the solution.
+
     Please ALWAYS honor ALL of these rules specific to your current job:
     - Do NOT come up with any new SYMBOLS, only use the ones mentioned in the TASK-DESCRIPTION.
     - Do NOT implement the TASK-DESCRIPTION, only extract the relevant SYMBOLS.

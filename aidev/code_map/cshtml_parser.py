@@ -13,12 +13,11 @@ from ..common.util import decode_normalize
 class Context(BaseModel):
     parent: Symbol
     relation: Relation
-    last_lineno: int
     depth: int
 
     @classmethod
-    def new(cls, parent: Symbol, relation: Relation, last_lineno: int, depth: int) -> 'Context':
-        return cls(parent=parent, relation=relation, last_lineno=last_lineno, depth=depth)
+    def new(cls, parent: Symbol, relation: Relation, depth: int) -> 'Context':
+        return cls(parent=parent, relation=relation, depth=depth)
 
 
 class CshtmlParser(TreeSitterParser):
@@ -33,14 +32,14 @@ class CshtmlParser(TreeSitterParser):
         source = Symbol.new(path, Category.SOURCE, Block.from_range(0, file_line_count), source_name)
         graph.add_symbol(source)
 
-        ctx: Context = Context.new(source, Relation.PARENT, file_line_count - 1, -1)
+        ctx: Context = Context.new(source, Relation.PARENT, -1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
         stack: list[Context] = []
 
         def push(c: Context):
             nonlocal ctx
-            assert c.last_lineno <= ctx.last_lineno, f'Invalid context blocks: {c.last_lineno} > {ctx.last_lineno}'
+            assert c.depth > ctx.depth, f'Invalid context blocks: {c.depth} <= {ctx.depth}'
             stack.append(ctx)
             ctx = c
             if self.debug:
@@ -71,7 +70,7 @@ class CshtmlParser(TreeSitterParser):
                 name = decode_normalize(tag_name.text)
                 symbol = Symbol.new(path, Category.ELEMENT, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno, depth))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             attribute_name = find_first_node(node, 'attribute', 'attribute_name')

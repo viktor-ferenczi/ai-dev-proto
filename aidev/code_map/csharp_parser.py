@@ -1,5 +1,4 @@
 import os
-from typing import Set
 from pprint import pformat
 
 from pydantic import BaseModel
@@ -14,11 +13,11 @@ from ..common.util import decode_normalize
 class Context(BaseModel):
     parent: Symbol
     relation: Relation
-    last_lineno: int
+    depth: int
 
     @classmethod
-    def new(cls, parent: Symbol, relation: Relation, last_lineno: int) -> 'Context':
-        return cls(parent=parent, relation=relation, last_lineno=last_lineno)
+    def new(cls, parent: Symbol, relation: Relation, depth: int) -> 'Context':
+        return cls(parent=parent, relation=relation, depth=depth)
 
 
 class CSharpParser(TreeSitterParser):
@@ -33,14 +32,14 @@ class CSharpParser(TreeSitterParser):
         source = Symbol.new(path, Category.SOURCE, Block.from_range(0, file_line_count), source_name)
         graph.add_symbol(source)
 
-        ctx: Context = Context.new(source, Relation.PARENT, file_line_count - 1)
+        ctx: Context = Context.new(source, Relation.PARENT, -1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
         stack: list[Context] = []
 
         def push(c: Context):
             nonlocal ctx
-            assert c.last_lineno <= ctx.last_lineno, f'Invalid context blocks: {c.last_lineno} > {ctx.last_lineno}'
+            assert c.depth > ctx.depth, f'Invalid context blocks: {c.depth} <= {ctx.depth}'
             stack.append(ctx)
             ctx = c
             if self.debug:
@@ -51,7 +50,7 @@ class CSharpParser(TreeSitterParser):
             last_lineno = lineno + node.text.count(b'\n')
             block = Block.from_range(lineno, last_lineno + 1)
 
-            while ctx.last_lineno < lineno:
+            while depth <= ctx.depth:
                 ctx = stack.pop()
                 if self.debug:
                     print(f'CTX: {"> " * len(stack)}{pformat(ctx)}')
@@ -68,7 +67,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.NAMESPACE, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'interface_declaration', 'qualified_name')
@@ -76,7 +75,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.INTERFACE, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'class_declaration', 'identifier')
@@ -84,7 +83,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.CLASS, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'struct_declaration', 'identifier')
@@ -92,7 +91,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.STRUCT, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'record_declaration', 'identifier')
@@ -100,7 +99,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.RECORD, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'method_declaration', 'identifier')
@@ -108,7 +107,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.FUNCTION, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'constructor_declaration', 'identifier')
@@ -116,7 +115,7 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.FUNCTION, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             identifier = find_first_node(node, 'local_declaration_statement', 'variable_declaration', 'variable_declarator', 'identifier')
@@ -124,12 +123,15 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.VARIABLE, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
+                symbol = Symbol.new(path, Category.STATEMENT, block)
+                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             if node.type.endswith('_statement') and ctx.parent.category != Category.STATEMENT:
                 symbol = Symbol.new(path, Category.STATEMENT, block)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
+                push(Context.new(symbol, Relation.CHILD, depth))
                 continue
 
             if node.type == 'identifier' and ctx.parent.category == Category.STATEMENT:
@@ -155,37 +157,18 @@ class CSharpParser(TreeSitterParser):
                 if statement is None or statement.category != Category.STATEMENT:
                     continue
 
-                # Rough scoping rules to exclude surely inaccessible symbols.
-                # It does not give exact accessibility, for example does not consider private or protected.
-
-                parents: list[Symbol] = [
-                    parent
-                    for parent in graph.walk_related(statement, Relation.PARENT)
-                    if parent.category in (Category.CLASS, Category.USING, Category.NAMESPACE, Category.SOURCE)
-                ]
-
-                # FIXME: Narrow down member and local variable access based on node.parent (member_access_expression, etc.)
-                # FIXME: Narrow down type references based on node.parent (parameter, object_creation_expression)
-
-                accessible: Set[Symbol] = set()
-                for parent in parents:
-
-                    # Map USING to NAMESPACE
-                    if parent.category == Category.USING:
-                        for other in graph.symbols.values():
-                            if other.category == Category.NAMESPACE and other.name == parent.name:
-                                parent = other
-                                break
-                        else:
-                            continue
-
-                    accessible.update(graph.walk_related(parent, Relation.CHILD))
+                usage_parent_function = graph.get_parent(statement)
 
                 name = symbol.name
-                for other in graph.symbols.values():
-                    if other.name == name and other in accessible:
-                        if other.category == Category.IDENTIFIER:
-                            statement = graph.get_parent(other)
-                            if statement is None or statement.category != Category.STATEMENT:
-                                continue
-                        graph.add_relation_both_ways(statement, Relation.USES, other)
+                for definition in graph.symbols.values():
+                    if definition.name != name:
+                        continue
+
+                    if definition.category not in (Category.VARIABLE, Category.FUNCTION, Category.CLASS, Category.STRUCT, Category.INTERFACE):
+                        continue
+
+                    definition_parent = graph.get_parent(definition)
+                    if definition_parent is not None and definition_parent.category == Category.FUNCTION and definition_parent != usage_parent_function:
+                        continue
+
+                    graph.add_relation_both_ways(statement, Relation.USES, definition)

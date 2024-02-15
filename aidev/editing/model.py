@@ -148,8 +148,8 @@ class Block(BaseModel):
             DocType.UNKNOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
             DocType.TEXT: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
             DocType.MARKDOWN: (lambda: f'**{MARKER_NAME}#{self.begin}:{self.end}**'),
-            DocType.PYTHON: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}")'),
-            DocType.CSHARP: (lambda: f'{MARKER_NAME}("{self.begin}:{self.end}");'),
+            DocType.PYTHON: (lambda: f'##{MARKER_NAME}("{self.begin}:{self.end}")'),
+            DocType.CSHARP: (lambda: f'//{MARKER_NAME}("{self.begin}:{self.end}");'),
             DocType.CSHTML: (lambda: f'<span class="{MARKER_NAME}">{self.begin}:{self.end}</span>'),
         }[doctype]
         return formatter()
