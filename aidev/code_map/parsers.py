@@ -20,8 +20,10 @@ def register(cls: ParserClass):
 
 
 from .csharp_parser import CSharpParser
+from .cshtml_parser import CshtmlParser
 
 register(CSharpParser)
+register(CshtmlParser)
 
 INITIALIZED = False
 
@@ -31,6 +33,8 @@ def init_tree_sitter():
 
     if INITIALIZED:
         return
+
+    INITIALIZED = True
 
     map_parser_classes()
     build_tree_sitter_library()

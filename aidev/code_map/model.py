@@ -51,6 +51,15 @@ class Category(SimpleEnum):
     STATEMENT = 'STATEMENT'
     """Statement (global or inside a function)"""
 
+    IDENTIFIER = 'IDENTIFIER'
+    """Identifier inside a statement referencing some other symbol (interface, class, struct, record, variable)"""
+
+    # CSHTML
+    ELEMENT = 'ELEMENT'
+    ATTRIBUTE = 'ATTRIBUTE'
+    CONTROLLER = 'CONTROLLER'
+    ACTION = 'ACTION'
+
     # Text
     PARAGRAPH = 'PARAGRAPH'
     MENTION = 'MENTION'
@@ -159,6 +168,12 @@ class Graph(BaseModel):
     def add_symbol_and_relation_both_ways(self, existing: Symbol, relation: Relation, new: Symbol):
         self.add_symbol(new)
         self.add_relation_both_ways(existing, relation, new)
+
+    def get_parent(self, child: Symbol) -> Optional[Symbol]:
+        for relation, parent in self.iter_related(child):
+            if relation == Relation.PARENT:
+                return parent
+        return None
 
     def iter_related(self, symbol: Symbol) -> Iterable[Tuple[Relation, Symbol]]:
         relations: Dict[Identifier, Relation] = self.relations.get(symbol.id)

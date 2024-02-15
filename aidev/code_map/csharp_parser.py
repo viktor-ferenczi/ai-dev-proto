@@ -61,7 +61,6 @@ class CSharpParser(TreeSitterParser):
                 name = decode_normalize(identifier.text)
                 symbol = Symbol.new(path, Category.USING, block, name)
                 graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, last_lineno))
                 continue
 
             identifier = find_first_node(node, 'namespace_declaration', 'qualified_name')
@@ -134,7 +133,27 @@ class CSharpParser(TreeSitterParser):
                 continue
 
             if node.type == 'identifier' and ctx.parent.category == Category.STATEMENT:
-                statement = ctx.parent
+                name = decode_normalize(node.text)
+                symbol = Symbol.new(path, Category.IDENTIFIER, ctx.parent.block, name)
+                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
+                continue
+
+    def cross_reference(self, graph: Graph, path: str):
+        for symbol in graph.symbols.values():
+            if symbol.path != path:
+                continue
+
+            if symbol.category == Category.USING:
+                for namespace in graph.symbols.values():
+                    if namespace.category == Category.NAMESPACE and namespace.name == symbol.name:
+                        graph.add_relation_both_ways(symbol, Relation.USES, namespace)
+                        break
+                continue
+
+            if symbol.category == Category.IDENTIFIER:
+                statement = graph.get_parent(symbol)
+                if statement is None or statement.category != Category.STATEMENT:
+                    continue
 
                 # Rough scoping rules to exclude surely inaccessible symbols.
                 # It does not give exact accessibility, for example does not consider private or protected.
@@ -153,16 +172,20 @@ class CSharpParser(TreeSitterParser):
 
                     # Map USING to NAMESPACE
                     if parent.category == Category.USING:
-                        for symbol in graph.symbols.values():
-                            if symbol.category == Category.NAMESPACE and symbol.name == parent.name:
-                                parent = symbol
+                        for other in graph.symbols.values():
+                            if other.category == Category.NAMESPACE and other.name == parent.name:
+                                parent = other
                                 break
                         else:
                             continue
 
                     accessible.update(graph.walk_related(parent, Relation.CHILD))
 
-                name = decode_normalize(node.text)
-                for symbol in graph.symbols.values():
-                    if symbol.name == name and symbol in accessible:
-                        graph.add_relation_both_ways(statement, Relation.USES, symbol)
+                name = symbol.name
+                for other in graph.symbols.values():
+                    if other.name == name and other in accessible:
+                        if other.category == Category.IDENTIFIER:
+                            statement = graph.get_parent(other)
+                            if statement is None or statement.category != Category.STATEMENT:
+                                continue
+                        graph.add_relation_both_ways(statement, Relation.USES, other)

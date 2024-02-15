@@ -142,6 +142,12 @@ class TaskProcessor:
             content = read_binary_file(full_path)
             parser.parse(graph, path, content)
 
+        for path in task.paths:
+            full_path = os.path.join(wc.project_dir, path)
+            parser_cls = detect_parser(full_path)
+            parser = parser_cls()
+            parser.cross_reference(graph, path)
+
         task.code_map = graph
 
     async def find_relevant_sources(self):
