@@ -1,9 +1,10 @@
+import json
 import unittest
 from typing import Set
 
 from aidev.common.util import join_lines
 from aidev.editing.model import Document, Block, Hunk, Patch
-from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO
+from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO, REGRESSION_DOCUMENT_JSON, REGRESSION_COMPLETION
 
 
 class TestEditingModel(unittest.TestCase):
@@ -215,12 +216,12 @@ class TestEditingModel(unittest.TestCase):
         self.assertEqual(Block.from_range(35, 62), patch.hunks[0].block)
         self.assertEqual(Block.from_range(63, 69), patch.hunks[1].block)
         self.assertEqual(Block.from_range(70, 75), patch.hunks[2].block)
-        self.assertEqual(Block.from_range(76, 80), patch.hunks[3].block)
+        self.assertEqual(Block.from_range(75, 79), patch.hunks[3].block)
 
         patch.merge_hunks()
         self.assertEqual(1, len(patch.hunks))
         hunk = patch.hunks[0]
-        self.assertEqual(Block.from_range(35, 80), hunk.block)
+        self.assertEqual(Block.from_range(35, 79), hunk.block)
         self.assertEqual(2, len(hunk.markers))
         self.assertEqual(Block.from_range(62, 63), hunk.markers[0])
         self.assertEqual(Block.from_range(69, 70), hunk.markers[1])
@@ -229,3 +230,9 @@ class TestEditingModel(unittest.TestCase):
         print('Merged')
         print('-' * 40)
         print(hunk.code_block)
+
+    def test_regression_overlapping_hunks(self):
+        document = Document(**json.loads(REGRESSION_DOCUMENT_JSON))
+        patch = Patch.from_completion(document, REGRESSION_COMPLETION)
+        patch.merge_hunks()
+        print(patch.hunks[0].code_block)

@@ -7,7 +7,7 @@ from aidev.common.util import SimpleEnum
 UNKNOWN_DATETIME = datetime.utcfromtimestamp(0)
 
 
-class BooleanChoice(str, SimpleEnum):
+class BooleanChoice(SimpleEnum):
     TRUE = "true"
     FALSE = "false"
     YES = "yes"
@@ -18,7 +18,7 @@ class BooleanChoice(str, SimpleEnum):
 
 
 # See https://docs.sonarsource.com/sonarqube/latest/user-guide/clean-code/
-class CleanCodeAttribute(str, SimpleEnum):
+class CleanCodeAttribute(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     FORMATTED = "FORMATTED"
     CONVENTIONAL = "CONVENTIONAL"
@@ -55,7 +55,7 @@ CLEAN_CODE_ATTRIBUTE_DESCRIPTIONS = {
 }
 
 
-class CleanCodeAttributeCategory(str, SimpleEnum):
+class CleanCodeAttributeCategory(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     ADAPTABLE = 'ADAPTABLE'
     CONSISTENT = 'CONSISTENT'
@@ -63,21 +63,21 @@ class CleanCodeAttributeCategory(str, SimpleEnum):
     RESPONSIBLE = 'RESPONSIBLE'
 
 
-class ImpactSeverity(str, SimpleEnum):
+class ImpactSeverity(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
 
 
-class ImpactSoftwareQuality(str, SimpleEnum):
+class ImpactSoftwareQuality(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     MAINTAINABILITY = "MAINTAINABILITY"
     RELIABILITY = "RELIABILITY"
     SECURITY = "SECURITY"
 
 
-class IssueStatus(str, SimpleEnum):
+class IssueStatus(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     OPEN = "OPEN"
     CONFIRMED = "CONFIRMED"
@@ -87,20 +87,20 @@ class IssueStatus(str, SimpleEnum):
     CLOSED = "CLOSED"
 
 
-class IssueScope(str, SimpleEnum):
+class IssueScope(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     MAIN = "MAIN"
     TEST = "TEST"
 
 
-class IssueType(str, SimpleEnum):
+class IssueType(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     CODE_SMELL = "CODE_SMELL"
     BUG = "BUG"
     VULNERABILITY = "VULNERABILITY"
 
 
-class IssueSeverity(str, SimpleEnum):
+class IssueSeverity(SimpleEnum):
     UNKNOWN = "UNKNOWN"
     CRITICAL = 'CRITICAL'
     HIGH = 'HIGH'

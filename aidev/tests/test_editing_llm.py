@@ -142,7 +142,7 @@ single code block.
         prompt_tokens = engine.count_tokens(system) + engine.count_tokens(instruction)
         max_tokens = min(engine.max_context - 100, prompt_tokens + 1000)
 
-        pattern = rf'```{doc.doctype.code_block_type}\n(.*?\n)+```\n'
+        pattern = rf'```{doc.doctype.code_block_type}\n(\n|[^`].*?\n)+```\n'
         constraint = Constraint.from_regex(pattern)
 
         params = GenerationParams(n=8, use_beam_search=True, max_tokens=max_tokens, constraint=constraint)

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from ..common.util import SimpleEnum
 
 
-class ConstraintType(str, SimpleEnum):
+class ConstraintType(SimpleEnum):
     JSON_SCHEMA = 'JSON_SCHEMA'
     REGEX = 'REGEX'
     GRAMMAR = 'GRAMMAR'

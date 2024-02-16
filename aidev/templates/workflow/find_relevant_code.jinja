@@ -1,40 +1,53 @@
 {% include 'general_rules.jinja' with context %}
 
-## Source CODE
+<INSTRUCTIONS>
 
-Understand and remember this source code:
+    Your job is to identify the part of CODE below relevant for the TASK below.
 
-{{ source }}
+    The relevant part of the CODE are the code lines somebody needs to understand to reason about the TASK.
+    These are the code lines somebody needs to read, modify or delete while implementing the TASK.
 
-## Instructions
+    Do NOT implement the TASK, your job is limited only to identifying the relevant part of the source code.
 
-Your job is to identify the part of CODE relevant for the TASK.
+    Your RESPONSE must be a single block of code of the same type (`{{ code_block_type }}`) as the original CODE above.
+    Your RESPONSE must include all code lines required to work on the TASK, include these code lines with no changes.
+    Your RESPONSE must include the preserved code lines in the same order as they were in the original source CODE.
 
-The relevant part of the CODE are the code lines somebody needs to understand to reason about the TASK.
-These are the code lines somebody needs to read, modify or delete while implementing the TASK.
+    The code lines in your RESPONSE should still follow the hirerachy of the source CODE, so it remains meaningful for
+    the reader. You can achieve this by removing blocks of code lines starting and ending at the same level of the
+    source CODE hierarchy. For example, if you remove the beginning of a method which is not relevant to the task,
+    then remove the whole method. If none of the code is relevant for the TASK, then respond with an empty code block.
 
-Do NOT implement the TASK, your job is limited only to identifying the relevant part of the source code.
+    Please ALWAYS honor ALL of these rules specific to your current job:
+    - Do NOT write any new code or comments.
+    - Do NOT implement the TASK, only prepare the code required to do so.
+    - Do NOT change any of the code lines you preserve, repeat them as-is.
+    - PRESERVE ONLY the code lines relevant for the TASK.
+    - PRESERVE ONLY the code blocks (methods, functions, classes, structs, enums, namespaces) which are relevant for the TASK.
+    - PRESERVE enough of the code's structure, so it can still be understood without asking questions.
+    - REMOVE all TODO and FIXME comments, they would be confusing while implementing the TASK.
+    - Do NOT mix parts of subsequent code blocks together. For example do NOT combine the beginning of a method with the end of another method.
 
-Your RESPONSE must be a single block of code of the same type (`{{ code_block_type }}`) as the original CODE above.
-Your RESPONSE must include all code lines required to work on the TASK, include these code lines with no changes.
-Your RESPONSE must include the preserved code lines in the same order as they were in the original source CODE.
+</INSTRUCTIONS>
 
-The code lines in your RESPONSE should still follow the hirerachy of the source CODE, so it remains meaningful for
-the reader. You can achieve this by removing blocks of code lines starting and ending at the same level of the
-source CODE hierarchy. For example, if you remove the beginning of a method which is not relevant to the task,
-then remove the whole method. If none of the code is relevant for the TASK, then respond with an empty code block.
+<SOURCE-CODE>
 
-Please ALWAYS honor ALL of these rules specific to your current job:
-- Do NOT write any new code or comments.
-- Do NOT implement the TASK, only prepare the code required to do so.
-- Do NOT change any of the code lines you preserve, repeat them as-is.
-- PRESERVE ONLY the code lines relevant for the TASK.
-- PRESERVE ONLY the code blocks (methods, functions, classes, structs, enums, namespaces) which are relevant for the TASK.
-- PRESERVE enough of the code's structure, so it can still be understood without asking questions.
-- REMOVE all TODO and FIXME comments, they would be confusing while implementing the TASK.
+    Understand and remember this source code:
 
-## TASK description
+    {{ source }}
 
-{{ task_description }}
+</SOURCE-CODE>
 
-Now take a deep breath and write down your RESPONSE code block of relevant code lines:
+<TASK>
+
+    {{ task_description }}
+
+</TASK>
+
+<PLAN>
+
+    {{ task.plan }}
+
+</PLAN>
+
+Now take a deep breath and write your RESPONSE code block of relevant code lines:

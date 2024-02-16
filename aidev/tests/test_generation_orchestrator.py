@@ -24,7 +24,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
                     Write a C# 10 console program to print the integers from 1 to 10, each one on a separate line.
                     Write only the code and nothing else. Do not explain, do not add source code comments.
                 ''',
-                GenerationParams(max_tokens=300, temperature=0.1)
+                GenerationParams(max_tokens=150, temperature=0.2)
             )
             generations.append(generation)
             return generation
@@ -32,7 +32,6 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         def create_source():
             source = Source.from_file(SCRIPT_DIR, __file__)
             source.relevant_generation = create_generation()
-            source.dependency_generations = [create_generation(), create_generation()]
             source.patch_generation = create_generation()
             return source
 
@@ -41,13 +40,14 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             ticket='Ticket-1',
             description='description',
             branch='branch',
-            state=TaskState.WIP,
-            source_selection_generations=[create_generation()],
+            state=TaskState.PLANNING,
+            planning_generations=[create_generation()],
+            feedback_generation=create_generation(),
             sources=[create_source(), create_source()],
         )
         solution.tasks[task.id] = task
 
-        self.assertEqual(9, len(generations))
+        self.assertEqual(6, len(generations))
 
         orchestrator = GenerationOrchestrator(solution)
 
@@ -55,13 +55,16 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         orchestrator.register_engine(engine)
 
         async def complete_task_when_generated():
-            for _ in range(600):
+            for _ in range(60):
+
                 if any(g.state == GenerationState.FAILED for g in generations):
                     raise RuntimeError('One or more generations failed')
+
                 if all(g.state == GenerationState.COMPLETED for g in generations):
                     task.state = TaskState.REVIEW
                     break
-                await asyncio.sleep(0.1)
+
+                await asyncio.sleep(0.5)
 
         await asyncio.wait([
             asyncio.create_task(orchestrator.run_until_complete()),

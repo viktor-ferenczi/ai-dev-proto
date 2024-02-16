@@ -1,20 +1,35 @@
 {% include 'general_rules.jinja' with context %}
 
-## TASK description
+<INSTRUCTIONS>
 
-{{ task.description }}
+    Your job is to provide a very concise summary of the most important part of the TEST-ERROR below.
+    The TEST-ERROR occured while attempting to compile the modified solution after implementing
+    the TASK.
 
-## Instructions
+    Write up to 5 sentences, not more. Strive for giving useful insight into why the test failed.
+    It should be a constructive feedback usable for anyone attempting to implement the TASK again.
+    The feedback should help avoiding the same mistake.
 
-Your job is to provide a very concise summary of the most important part of the above error
-considering the task which was implemented. Write up to 5 sentences, not more. Strive for
-giving an insight into why the tests failed as a constructive feedback for anyone attempting
-to implement the task again. It should help the next implementer in avoiding the same mistake.
+    Concentrate only on the test errors.
+    In case of multiple errors focus only on the first one.
+    Ignore any warnings and other non-critical content.
 
-After implementing the above TASK the solution failed to test with the following error:
+</INSTRUCTIONS>
 
-```
-{{ error }}
-```
+<TASK>
 
-Now take a deep breath and provide the feedback.
+    {{ task.description }}
+
+</TASK>
+
+<TEST-ERROR>
+
+    After implementing the above TASK running the tests of the solution failed with the following ERROR:
+
+    ```
+    {{ error }}
+    ```
+
+</TEST-ERROR>
+
+Now take a deep breath and write your FEEDBACK:

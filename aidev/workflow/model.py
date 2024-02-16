@@ -1,17 +1,18 @@
 import asyncio
 import os
 from traceback import format_exc
-from typing import Optional, Iterable, Callable
+from typing import Optional, Iterable
 from pydantic import BaseModel
 
+from ..code_map.model import Graph
 from ..common.config import C
-from ..common.util import SimpleEnum, join_lines
+from ..common.util import SimpleEnum
 from ..editing.model import Patch, Document, Hunk
 from ..engine.engine import Engine
 from ..engine.params import GenerationParams
 
 
-class GenerationState(str, SimpleEnum):
+class GenerationState(SimpleEnum):
     """Represents possible states of Generation"""
     PENDING = "PENDING"
     GENERATING = "GENERATING"
@@ -64,13 +65,15 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        self.state = GenerationState.GENERATING
+        print('Starting generation')
         try:
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
+            print('Failed generation')
             self.state = GenerationState.FAILED
             self.error = format_exc()
         else:
+            print('Finished generation')
             self.state = GenerationState.COMPLETED
 
     async def wait(self):
@@ -79,7 +82,7 @@ class Generation(BaseModel):
             await asyncio.sleep(0.2)
 
 
-class SourceState(str, SimpleEnum):
+class SourceState(SimpleEnum):
     """Represents possible states of Source"""
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"
@@ -115,12 +118,6 @@ class Source(BaseModel):
     relevant: Optional[Hunk] = None
     """Relevant part of the code"""
 
-    dependency_generations: Optional[list[Generation]] = None
-    """Iterative requests to find missing dependencies"""
-
-    dependencies: Optional[list[Dependency]] = None
-    """Dependencies retrieved from the code map"""
-
     patch_generation: Optional[Generation] = None
     """Text generation to actually implement the change"""
 
@@ -141,14 +138,11 @@ class Source(BaseModel):
         )
 
     def iter_generations(self) -> Iterable[Generation]:
-        if self.state != 'PENDING':
+        if self.state != SourceState.PENDING:
             return
 
         if self.relevant_generation is not None:
             yield self.relevant_generation
-
-        if self.dependency_generations is not None:
-            yield from self.dependency_generations
 
         if self.patch_generation is not None:
             yield self.patch_generation
@@ -164,14 +158,23 @@ class Feedback(BaseModel):
     """The criticism provided in Markdown format"""
 
 
-class TaskState(str, SimpleEnum):
+class TaskState(SimpleEnum):
     """Possible states of a Task"""
     NEW = "NEW"
-    WIP = "WIP"
+    PLANNING = "PLANNING"
+    CODING = "CODING"
+    TESTING = "TESTING"
     REVIEW = "REVIEW"
     MERGED = "MERGED"
     REJECTED = "REJECTED"
     FAILED = "FAILED"
+
+
+TASK_WIP_STATES = (
+    TaskState.PLANNING,
+    TaskState.CODING,
+    TaskState.TESTING,
+)
 
 
 class Task(BaseModel):
@@ -198,11 +201,29 @@ class Task(BaseModel):
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
-    source_selection_generations: Optional[list[Generation]] = None
-    """Text generation to select the source code files relevant for the task"""
+    paths: Optional[list[str]] = None
+    """Paths of all source files in the solution which may be considered"""
+
+    code_map: Optional[Graph] = None
+    """Code map constructed from parsing all the source files before making any changes"""
+
+    relevant_symbols_generation: Optional[Generation] = None
+    """Text generation used to extract the name of relevant symbols from the task description"""
+
+    relevant_symbols: Optional[list[str]] = None
+    """List of the IDs of the relevant symbols required to work on the task"""
+
+    planning_generations: Optional[list[Generation]] = None
+    """Text generations used for planning the implementation"""
+
+    plan: Optional[str] = None
+    """Step-by-step plan to implement the task"""
 
     sources: Optional[list[Source]] = None
-    """Source files that need to be modified, does not include dependencies from the code map"""
+    """Source files that need to be modified, extended during planning"""
+
+    patch_generation: Optional[Generation] = None
+    """Text generation to actually implement the change to one or more source code hunks at the same time"""
 
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""
@@ -220,15 +241,25 @@ class Task(BaseModel):
     """Error message in FAILED state"""
 
     @property
+    def is_wip(self) -> bool:
+        return self.state in TASK_WIP_STATES
+
+    @property
     def is_remaining(self) -> bool:
-        return self.state in (TaskState.NEW, TaskState.WIP)
+        return self.state == TaskState.NEW or self.is_wip
 
     def iter_generations(self) -> Iterable[Generation]:
-        if self.state != 'WIP':
+        if not self.is_wip:
             return
 
-        if self.source_selection_generations is not None:
-            yield from self.source_selection_generations
+        if self.relevant_symbols_generation is not None:
+            yield self.relevant_symbols_generation
+
+        if self.planning_generations is not None:
+            yield from self.planning_generations
+
+        if self.patch_generation is not None:
+            yield self.patch_generation
 
         if self.feedback_generation is not None:
             yield self.feedback_generation

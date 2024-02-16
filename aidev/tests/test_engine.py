@@ -2,7 +2,7 @@ import json
 import time
 
 import unittest
-from logging import DEBUG, INFO
+from logging import DEBUG
 from typing import Optional
 
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ LOG_REQUESTS = False
 class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
-        logger = init_logger(DEBUG if LOG_REQUESTS else INFO)
+        logger = init_logger(DEBUG) if LOG_REQUESTS else None
 
         if C.ENGINE == 'openai':
             from aidev.engine.openai_engine import OpenAIEngine
@@ -36,9 +36,6 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         del self.engine
         return await super().asyncTearDown()
-
-    def create_engine(self):
-        raise NotImplementedError()
 
     async def test_single_completion(self):
         system = "You are a helpful AI assistant. You give concise answers. If you do not know something, then say so."

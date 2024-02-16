@@ -17,7 +17,7 @@ locally hosted LLMs.
 
 ### Python
 
-Python version 3.10 or newer. Tested on 3.10.10.
+Python version 3.12 or newer.
 
 ### Python packages
 

@@ -1,13 +1,17 @@
 import asyncio
+import hashlib
 import difflib
 import os
 import re
+import time
+import uuid
 import shutil
+from contextlib import contextmanager
 from enum import Enum
 from logging import Logger, INFO, getLogger, StreamHandler, Formatter
-from typing import Iterable
+from typing import Iterable, List, Callable, Iterator, Awaitable, Any, Dict, Optional
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader, Template, StrictUndefined
 
 from .config import C
 
@@ -26,7 +30,7 @@ def get_next_free_numbered_file(issue_log_dir: str) -> int:
     return highest + 1
 
 
-def split_to_lines_and_clean(text: str) -> list[str]:
+def split_to_lines_and_clean(text: str) -> List[str]:
     return [line for line in (line.rstrip() for line in text.splitlines()) if line]
 
 
@@ -96,7 +100,7 @@ def read_text_file(path: str, encoding='utf-8-sig') -> str:
         return f.read()
 
 
-def read_text_files(paths: list[str], encoding='utf-8-sig') -> Iterable[str]:
+def read_text_files(paths: List[str], encoding='utf-8-sig') -> Iterable[str]:
     for path in paths:
         yield read_text_file(path, encoding)
 
@@ -137,7 +141,7 @@ def copy_indent(example: str, text: str) -> str:
     return example[:-len(example.lstrip())] + text.lstrip()
 
 
-class SimpleEnum(Enum):
+class SimpleEnum(str, Enum):
 
     def __str__(self):
         return f"{self.name}"
@@ -154,7 +158,7 @@ def get_prompt_template_for_model(model: str) -> Template:
     return prompt_template
 
 
-def extract_code_blocks(completion: str) -> list[str]:
+def extract_code_blocks(completion: str) -> List[str]:
     parts = ('\n' + completion).split('\n```')
     if len(parts) < 2:
         return []
@@ -183,39 +187,42 @@ def render_template(_path: str, **variables) -> str:
     if not os.path.exists(_path):
         raise FileNotFoundError(f"The file {_path} does not exist.")
 
-    env = Environment(loader=FileSystemLoader(os.path.dirname(_path)))
+    env = Environment(
+        loader=FileSystemLoader(os.path.dirname(_path)),
+        undefined=StrictUndefined,
+    )
     template = env.get_template(os.path.basename(_path))
     return template.render(**variables)
 
 
 def render_workflow_template(_name: str, **variables) -> str:
     path = os.path.join(C.WORKFLOW_TEMPLATES_DIR, f'{_name}.jinja')
-    return render_template(path, **variables)
+    return unindent_code_blocks(render_template(path, **variables))
 
 
 def render_markdown_template(_name: str, **variables) -> str:
     path = os.path.join(C.MARKDOWN_TEMPLATES_DIR, f'{_name}.jinja')
-    indented_markdown = render_template(path, **variables)
-    return unindent_markdown(indented_markdown)
+    return unindent_code_blocks(render_template(path, **variables))
 
 
-def unindent_markdown(md: str) -> str:
+def unindent_code_blocks(md: str) -> str:
     lines = md.split('\n')
 
     in_code = False
     for i, line in enumerate(lines):
 
-        if not in_code:
-            lines[i] = line = line.strip()
-
-        if line.startswith('```'):
+        if line.lstrip().startswith('```'):
+            lines[i] = line.strip()
             in_code = not in_code
             continue
+
+        if not in_code:
+            lines[i] = line.strip()
 
     return join_lines(lines)
 
 
-def regex_from_lines(lines: list[str]) -> str:
+def regex_from_lines(lines: List[str]) -> str:
     return ''.join(rf'({re.escape(path)}\n)?' for path in lines)
 
 
@@ -224,3 +231,112 @@ def copy_directory(src: str, dst: str):
         shutil.rmtree(dst)
     os.makedirs(dst)
     shutil.copytree(src, dst, dirs_exist_ok=True)
+
+
+def find(lst: List[object], predicate: Callable[[object], bool]):
+    for i, v in enumerate(lst):
+        if predicate(v):
+            return i
+    return -1
+
+
+def find_iter(text: str, sub: str) -> Iterator[int]:
+    i = 0
+    e = len(text)
+    while i < e:
+        f = text.find(sub, i)
+        if f < 0:
+            break
+        yield f
+        i = f + len(sub)
+
+
+def new_uuid() -> str:
+    return str(uuid.uuid4())
+
+
+async def sleep_forever():
+    while 1:
+        await asyncio.sleep(3600)
+
+
+def retry(fn: Callable[[], Any], handle_exceptions=(), max_retries: int = 9, delay: float = 0.01, delay_multiplier: float = 1.4142135, max_delay: float = 1.0) -> Any:
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except handle_exceptions:
+            time.sleep(delay)
+            delay = min(max_delay, delay * delay_multiplier)
+
+    return fn()
+
+
+async def async_retry(fn: Callable[[], Awaitable[Any]], handle_exceptions=(), max_retries: int = 9, delay: float = 0.01, delay_multiplier: float = 1.4142135, max_delay: float = 1.0) -> Any:
+    for attempt in range(max_retries):
+        try:
+            return await fn()
+        except handle_exceptions as e:
+            print(f'WARNING: Retry {1 + attempt}/{max_retries} of {fn.__name__} in {delay:.3f}s due to error: [{e.__class__.__name__}] {e}')
+            await asyncio.sleep(delay)
+            delay = min(max_delay, delay * delay_multiplier)
+
+    return await fn()
+
+
+def hash_bytes(data: bytes) -> str:
+    sha = hashlib.sha256()
+    sha.update(data)
+    return sha.hexdigest()
+
+
+def hash_file(path: str) -> str:
+    sha = hashlib.sha256()
+    with open(path, 'rb') as f:
+        while 1:
+            chunk = f.read(0x8000)
+            if not chunk:
+                break
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def count_lines(text: str) -> int:
+    return 1 + text.count('\n')
+
+
+def decode_normalize(content: bytes) -> str:
+    try:
+        decoded = content.decode('utf-8')
+    except UnicodeDecodeError:
+        decoded = content.decode('latin-1')
+
+    return normalize(decoded)
+
+
+def normalize(content: str) -> str:
+    return content.replace('\r\n', '\n').replace('\r', '').replace('\0', '\f')
+
+
+@contextmanager
+def timer(prefix='', *, count: int = None, unit: str = None, stats: Dict[str, any] = None, minimum: Optional[float] = None, show: bool = True):
+    started = time.time()
+    yield
+    duration = time.time() - started
+
+    frequency = None
+    frequency_text = ''
+    if count and isinstance(count, int):
+        frequency = count / max(1e-6, duration)
+        frequency_text = f' ({frequency:.1f}{" " + unit if unit else ""}/s)'
+
+    if stats is not None:
+        stats['duration'] = duration
+        if count is not None:
+            stats['count'] = count
+        if unit is not None:
+            stats['unit'] = unit
+        if frequency is not None:
+            stats['frequency'] = frequency
+
+    if show and (minimum is None or duration >= minimum):
+        print(f'{prefix} in {duration:.3f}s{frequency_text}')

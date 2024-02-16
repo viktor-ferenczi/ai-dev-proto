@@ -1,0 +1,44 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to identify the SYMBOLS while may need to be used or changed while implementing the TASK-DESCRIPTION below.
+    Do NOT implement the TASK-DESCRIPTION, your job is limited only to identifying the relevant SYMBOLS.
+
+    A relevant symbol is one of:
+    - Namespace
+    - Interface
+    - Class
+    - Struct
+    - Record
+    - Method
+    - Member variable
+    - Local variable
+
+    Identify only SYMBOLS with meaningful names, e.g. ignore anything too short and generic like `i` or `j`.
+
+    Your RESPONSE must be JSON according to this schema:
+
+    ```jsonschema
+    {{ schema }}
+    ```
+
+    The `symbols` field must contain the names of the relevant SYMBOLS in any order.
+
+    EXCLUDE all the C# language, .NET Core, LINQ and standard library types, class, interface, function
+    and member variable names, like `IEnumerable`, `null` and others. We want only the names of the symbols
+    which are specific to the solution at hand and can be changed by the developer of the solution.
+
+    Please ALWAYS honor ALL of these rules specific to your current job:
+    - Do NOT come up with any new SYMBOLS, only use the ones mentioned in the TASK-DESCRIPTION.
+    - Do NOT implement the TASK-DESCRIPTION, only extract the relevant SYMBOLS.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task.description }}
+
+</TASK-DESCRIPTION>
+
+Now take a deep breath and write your RESPONSE block:

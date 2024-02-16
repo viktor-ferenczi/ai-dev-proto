@@ -11,60 +11,70 @@
         {% set error = source.error %}
         {% include 'error.jinja' with context %}
     </details>
+
 {% endif %}
 
 
 {% if source.relevant_generation %}
-<details>
-    <summary>Relevant code identification</summary>
-    {% set generation = source.relevant_generation %}
-    {% include 'generation.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Relevant code identification</summary>
+        {% set generation = source.relevant_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+
 {% endif %}
 
 
-{% if source.dependency_generations %}
+{% if source.relevant %}
+
+    ---
+
     <details>
-        <summary>Dependency generations</summary>
-
-        {% for dependency_generation in source.dependency_generations %}
-
-            <details>
-                <summary>Generation {{ loop.index }}</summary>
-
-                {% set generation = dependency_generation %}
-                {% include 'generation.jinja' with context %}
-
-            </details>
-
-        {% endfor %}
-
+        <summary>Relevant code</summary>
+        {% set hunk = source.relevant %}
+        {% include 'hunk.jinja' with context %}
     </details>
+
 {% endif %}
 
 
 {% if source.patch_generation %}
-<details>
-    <summary>Patch generation</summary>
-    {% set generation = source.patch_generation %}
-    {% include 'generation.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Patch generation</summary>
+        {% set generation = source.patch_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+
 {% endif %}
 
 
 {% if source.patch %}
-<details>
-    <summary>Patch</summary>
-    {% set patch = source.patch %}
-    {% include 'patch.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Patch</summary>
+        {% set patch = source.patch %}
+        {% include 'patch.jinja' with context %}
+    </details>
+
 {% endif %}
 
 
 {% if source.implementation %}
-<details>
-    <summary>Implementation</summary>
-    {% set document = source.implementation %}
-    {% include 'document.jinja' with context %}
-</details>
+
+    ---
+
+    <details>
+        <summary>Implementation</summary>
+        {% set document = source.implementation %}
+        {% include 'document.jinja' with context %}
+    </details>
+
 {% endif %}

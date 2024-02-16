@@ -38,7 +38,7 @@ class Config:
     KEEP_FAILING_CODE: bool = os.getenv('AIDEV_KEEP_FAILING_CODE', 'n').lower() in ('1', 'y', 'yes', 't', 'true')
 
     # Task orchestration
-    MAX_PARALLEL_TASKS: int = 2
+    MAX_PARALLEL_TASKS: int = 1
 
     # Markdown code block type by file extension
     DOCTYPE_BY_EXTENSION: Dict[str, str] = {
@@ -94,6 +94,12 @@ class Config:
 
     # Async
     SLOW_CALLBACK_DURATION_THRESHOLD = 1.0  # s
+
+    # Code map
+    HASH_SYMBOL_IDS = False
+
+    # Planning
+    MAX_PLANNING_STEPS = 10
 
     def save(self, path: str):
         with open(path, 'wt') as f:

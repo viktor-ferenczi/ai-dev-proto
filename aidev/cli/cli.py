@@ -5,9 +5,10 @@ import os
 from logging import DEBUG
 from typing import Optional
 
+from aidev.code_map.parsers import init_tree_sitter
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
-from aidev.developer.project import Project
+from aidev.workflow.working_copy import WorkingCopy
 from aidev.editing.model import Document
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.sonar.client import SonarClient
@@ -104,14 +105,16 @@ async def main(argv: Optional[list[str]] = None):
 
     set_slow_callback_duration_threshold(C.SLOW_CALLBACK_DURATION_THRESHOLD)
 
-    project = Project(project_dir, project_name)
+    project = WorkingCopy(project_dir, project_name)
     subparser = parser.subparsers.choices[command]
     subparser_argument_names = [action.dest for action in subparser._actions if action.__class__.__name__.startswith('_Store')]
     await COMMANDS[command](project, branch, **{name: getattr(args, name) for name in subparser_argument_names})
 
 
-async def command_fix(project: Project, branch: str, source: str):
+async def command_fix(project: WorkingCopy, branch: str, source: str):
     assert source == 'sonar', f'Unknown source: {source}'
+
+    init_tree_sitter()
 
     solution = Solution.new(project.project_name, project.project_dir)
     print(f'Solution: {solution.name}')
@@ -165,7 +168,7 @@ async def command_fix(project: Project, branch: str, source: str):
     print('Done')
 
 
-async def command_test(project: Project, branch: str, keep: bool):  # , unit: bool, fixture: bool
+async def command_test(project: WorkingCopy, branch: str, keep: bool):  # , unit: bool, fixture: bool
     raise NotImplementedError()
 
 

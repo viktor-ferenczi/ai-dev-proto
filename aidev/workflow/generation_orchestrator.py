@@ -36,6 +36,7 @@ class GenerationOrchestrator:
 
             for engine in self.engines:
                 if generation.can_run_on(engine):
+                    generation.state = GenerationState.GENERATING
                     pool.run(generation.run_on(engine))
                     if len(pool) >= self.max_parallel_generations:
                         return
