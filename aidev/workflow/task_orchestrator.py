@@ -1,4 +1,5 @@
 import asyncio
+from typing import Dict
 
 from .model import Solution, Task, TaskState
 from .task_processor import TaskProcessor
@@ -13,7 +14,7 @@ class TaskOrchestrator:
     def __init__(self, solution: Solution):
         super().__init__()
         self.solution: Solution = solution
-        self.wip_tasks: dict[str, Task] = {}
+        self.wip_tasks: Dict[str, Task] = {}
 
         # FIXME: Support multiple folders per solution for parallel work
         self.working_copies = [

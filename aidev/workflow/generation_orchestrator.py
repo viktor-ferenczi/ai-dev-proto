@@ -2,7 +2,8 @@ import asyncio
 
 from ..common.async_helpers import AsyncPool
 from ..engine.engine import Engine
-from .model import Solution, GenerationState
+from .model import Solution
+from ..thinking.model import GenerationState
 
 
 class GenerationOrchestrator:

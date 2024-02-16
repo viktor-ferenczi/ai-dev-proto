@@ -1,85 +1,12 @@
-import asyncio
 import os
-from traceback import format_exc
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Dict
 from pydantic import BaseModel
 
 from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum
 from ..editing.model import Patch, Document, Hunk
-from ..engine.engine import Engine
-from ..engine.params import GenerationParams
-
-
-class GenerationState(SimpleEnum):
-    """Represents possible states of Generation"""
-    PENDING = "PENDING"
-    GENERATING = "GENERATING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-
-
-class Generation(BaseModel):
-    """Represents a single invocation of a Language Model (LLM), which may produce multiple completions (batch generation)"""
-
-    state: GenerationState
-    """The state of the generation process"""
-
-    system: str
-    """The system part of the prompt"""
-
-    instruction: str
-    """The instruction part of the prompt"""
-
-    params: GenerationParams
-    """Parameters to select a model and control the text generation"""
-
-    completions: Optional[list[str]] = None
-    """List of text completions once the LLM has finished generating"""
-
-    error: Optional[str] = None
-    """Error message in FAILED state"""
-
-    @classmethod
-    def new(cls, system: str, instruction: str, params: GenerationParams) -> 'Generation':
-        return cls(
-            state=GenerationState.PENDING,
-            system=system,
-            instruction=instruction,
-            params=params,
-            completions=[],
-            error=None,
-        )
-
-    @property
-    def is_finished(self) -> bool:
-        return self.state in (GenerationState.COMPLETED, GenerationState.FAILED)
-
-    def can_run_on(self, engine: Engine):
-        tokens_can_fit = self.params.max_tokens <= engine.max_context
-        constraint_is_supported = (
-                self.params.constraint is None or
-                self.params.constraint.type in engine.supported_constraint_types
-        )
-        return tokens_can_fit and constraint_is_supported
-
-    async def run_on(self, engine: Engine):
-        print('Starting generation')
-        try:
-            self.completions = await engine.generate(self.system, self.instruction, self.params)
-        except Exception:
-            print('Failed generation')
-            self.state = GenerationState.FAILED
-            self.error = format_exc()
-        else:
-            print('Finished generation')
-            self.state = GenerationState.COMPLETED
-
-    async def wait(self):
-        # FIXME: Replace with waiting on a state change async event
-        while not self.is_finished:
-            await asyncio.sleep(0.2)
+from ..thinking.model import Generation
 
 
 class SourceState(SimpleEnum):
@@ -88,19 +15,6 @@ class SourceState(SimpleEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIP = "SKIP"
-
-
-class Dependency(BaseModel):
-    """Represents the definition of a dependency pulled from the code map"""
-
-    symbol: str
-    """The name of a symbol in the source code for which the dependency is pulled"""
-
-    path: str
-    """The path of the source file from which the definition is pulled"""
-
-    definition: str
-    """The definition of the dependency, such as enum, class, struct, method, etc"""
 
 
 class Source(BaseModel):
@@ -280,7 +194,7 @@ class Solution(BaseModel):
     folder: str
     """Working copy folder"""
 
-    tasks: dict[str, Task]
+    tasks: Dict[str, Task]
     """All tasks by ID regardless of their state"""
 
     @classmethod

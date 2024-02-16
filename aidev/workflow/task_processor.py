@@ -7,7 +7,8 @@ from typing import Set
 from pydantic import BaseModel
 
 from .model import Solution, Task
-from .model import TaskState, Source, Generation, GenerationState, SourceState, Feedback
+from .model import TaskState, Source, SourceState, Feedback
+from ..thinking.model import GenerationState, Generation
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
 from ..code_map.parsers import detect_parser
@@ -165,7 +166,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_json_schema(schema)
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
         await gen.wait()
 
@@ -269,7 +270,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
         params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
         self.dump_task()
@@ -370,7 +371,7 @@ class TaskProcessor:
         )
 
         params = GenerationParams(max_tokens=300, temperature=self.temperature)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen
         await gen.wait()

@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from pydantic import BaseModel
 
@@ -20,7 +20,7 @@ class Constraint(BaseModel):
         return cls(type=ConstraintType.REGEX, value=pattern)
 
     @classmethod
-    def from_json_schema(cls, json_schema: dict[str, Any]):
+    def from_json_schema(cls, json_schema: Dict[str, Any]):
         return cls(type=ConstraintType.JSON_SCHEMA, value=json_schema)
 
     @classmethod
