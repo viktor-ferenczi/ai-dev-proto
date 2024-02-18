@@ -235,6 +235,9 @@ class Task(BaseModel):
     patch_generation: Optional[Generation] = None
     """Text generation to actually implement the change to one or more source code hunks at the same time"""
 
+    integration_generations: Optional[list[Generation]] = None
+    """Text generations to integrate code changes"""
+
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""
 
@@ -270,6 +273,9 @@ class Task(BaseModel):
 
         if self.patch_generation is not None:
             yield self.patch_generation
+
+        if self.task.integration_generations is not None:
+            yield from self.task.integration_generations
 
         if self.feedback_generation is not None:
             yield self.feedback_generation

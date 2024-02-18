@@ -281,12 +281,8 @@ class Hunk(BaseModel):
         return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
-    def text_start_finish(self) -> str:
-        return join_lines(['//START'] + self.lines + ['//FINISH'])
-
-    @property
     def code_block_start_finish(self) -> str:
-        return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text_start_finish)}\n```'
+        return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
     def code_block_lines(self) -> list[str]:

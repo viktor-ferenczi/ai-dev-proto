@@ -1,0 +1,25 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to reintegrate the MODIFIED-CODE into ORIGINAL-CODE.
+    You should not write any new code, just replace the appropriate code lines in
+    ORIGINAL-CODE with the code lines from the MODIFIED-CODE block.
+
+    Your RESPONSE must be a single block of code of the same type (`{{ code_block_type }}`) as the ORIGINAL-CODE.
+
+</INSTRUCTIONS>
+
+<MODIFIED-CODE>
+
+    {{ modified_code_block }}
+
+</MODIFIED-CODE>
+
+<ORIGINAL-CODE>
+
+    {{ original_code_block }}
+
+</ORIGINAL-CODE>
+
+Take a deep breath and write your RESPONSE.
