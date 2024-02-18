@@ -5,8 +5,7 @@ import unittest
 from aidev.engine.params import GenerationParams
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
-from aidev.workflow.model import Solution, Task, TaskState, Source
-from aidev.thinking.model import GenerationState, Generation
+from aidev.workflow.model import Solution, Task, TaskState, Source, GenerationState, Generation
 
 SCRIPT_DIR = os.path.dirname(__file__)
 

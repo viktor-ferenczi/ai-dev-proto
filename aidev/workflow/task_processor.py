@@ -2,21 +2,27 @@ import json
 import os
 import re
 import traceback
-from typing import Set
+from typing import Set, Optional
 
 from pydantic import BaseModel
 
-from .model import Solution, Task
+from .model import Solution, Task, GenerationState, Generation
 from .model import TaskState, Source, SourceState, Feedback
 from ..common.config import C
-from ..thinking.model import GenerationState, Generation
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
 from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
 from ..editing.model import Patch, Block, Hunk, MARKER_NAME
 from ..engine.params import GenerationParams, Constraint
-from ..thinking.planning import Planning
+
+
+class VerifyPlanResponse(BaseModel):
+    approve_changes: bool
+    reasoning: str
+
+
+VERIFY_PLAN_RESPONSE_SCHEMA = VerifyPlanResponse.model_json_schema()
 
 
 class TaskProcessor:
@@ -58,9 +64,8 @@ class TaskProcessor:
 
                 self.dump_task()
 
-                if task.planning is None:
-                    task.planning = Planning.new()
-                    await task.planning.run(task, C.MAX_PLANNING_ATTEMPTS)
+                if task.plan is None:
+                    await self.plan()
                 if task.state == TaskState.FAILED:
                     return
 
@@ -255,6 +260,53 @@ class TaskProcessor:
                 source.relevant = patch.hunks[0]
 
         task.state = TaskState.CODING
+
+    async def plan(self):
+        task = self.task
+        task.planning_generations = []
+
+        for attempt in range(C.MAX_PLANNING_ATTEMPTS):
+            instruction = render_workflow_template(
+                'plan',
+                task=task,
+            )
+            params = GenerationParams(n=12, beam_search=True, max_tokens=1000, temperature=0.7)
+            plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+            task.planning_generations.append(plan_gen)
+            await plan_gen.wait()
+            if plan_gen.state != GenerationState.COMPLETED:
+                task.state = TaskState.FAILED
+                task.error = 'Planning generation failed'
+                return
+
+            for plan_index, completion in enumerate(plan_gen.completions):
+
+                instruction = render_workflow_template(
+                    'verify_plan',
+                    task=task,
+                    schema=VERIFY_PLAN_RESPONSE_SCHEMA,
+                    proposed_code_changes=completion
+                )
+
+                constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)
+                params = GenerationParams(n=11, max_tokens=500, temperature=0.5, constraint=constraint)
+                verify_gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+                task.planning_generations.append(verify_gen)
+                await verify_gen.wait()
+                if verify_gen.state != GenerationState.COMPLETED:
+                    task.state = TaskState.FAILED
+                    task.error = f'Plan verification generation failed: {verify_gen.error}'
+                    return
+
+                vote = sum(json.loads(response)['approve_changes'] for response in verify_gen.completions)
+                if vote >= (params.n + 1) // 2:
+                    task.plan = completion
+                    self.concluding_id = plan_gen.id
+                    self.concluding_index = plan_index
+                    return
+
+        task.state = TaskState.FAILED
+        task.error = 'Failed to plan code changes (max attempts)'
 
     async def code_task(self):
         task = self.task

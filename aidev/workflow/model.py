@@ -1,13 +1,108 @@
+import asyncio
 import os
+from traceback import format_exc
 from typing import Optional, Iterable, Dict
+from uuid import uuid4
+
 from pydantic import BaseModel
 
-from aidev.thinking.planning import Planning
 from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum
 from ..editing.model import Patch, Document, Hunk
-from ..thinking.model import Generation
+from ..engine.engine import Engine
+from ..engine.params import GenerationParams
+
+
+class GenerationState(SimpleEnum):
+    """Represents possible states of Generation"""
+    PENDING = "PENDING"
+    GENERATING = "GENERATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class Generation(BaseModel):
+    """Represents a single invocation of a Language Model (LLM), which may produce multiple completions (batch generation)"""
+
+    id: str
+    """Unique ID of this generation"""
+
+    label: str
+    """Label to identify the role of the generation in the thinking structure"""
+
+    state: GenerationState
+    """The state of the generation process"""
+
+    system: str
+    """The system part of the prompt"""
+
+    instruction: str
+    """The instruction part of the prompt"""
+
+    params: GenerationParams
+    """Parameters to select a model and control the text generation"""
+
+    completions: Optional[list[str]] = None
+    """List of text completions once the LLM has finished generating"""
+
+    error: Optional[str] = None
+    """Error message in FAILED state"""
+
+    @classmethod
+    def new(cls, label: str, system: str, instruction: str, params: GenerationParams) -> 'Generation':
+        return cls(
+            id=str(uuid4()),
+            label=label,
+            state=GenerationState.PENDING,
+            system=system,
+            instruction=instruction,
+            params=params,
+            completions=[],
+            error=None,
+        )
+
+    @property
+    def is_finished(self) -> bool:
+        return self.state in (GenerationState.COMPLETED, GenerationState.FAILED)
+
+    def can_run_on(self, engine: Engine):
+        tokens_can_fit = self.params.max_tokens <= engine.max_context
+        constraint_is_supported = (
+                self.params.constraint is None or
+                self.params.constraint.type in engine.supported_constraint_types
+        )
+        return tokens_can_fit and constraint_is_supported
+
+    async def run_on(self, engine: Engine):
+        try:
+            print(f'Starting generation: {self.label}')
+
+            system_tokens = engine.count_tokens(self.system)
+            instruction_tokens = engine.count_tokens(self.instruction)
+            # FIXME: Hardcoded guess for the overhead of the prompt template
+            expected_total_tokens = system_tokens + instruction_tokens + self.params.max_tokens + 100
+            if expected_total_tokens > engine.max_context:
+                self.state = GenerationState.FAILED
+                self.error = f'The expected number of tokens in the context window exceeds the maximum context size of the model: system_tokens={system_tokens}, instruction_tokens={instruction_tokens}, expected_total_tokens={expected_total_tokens}, engine.max_context={engine.max_context}'
+                print(f'Invalid generation: {self.label}')
+                print(self.error)
+                return
+
+            self.completions = await engine.generate(self.system, self.instruction, self.params)
+        except Exception:
+            self.state = GenerationState.FAILED
+            self.error = format_exc()
+            print(f'Failed generation: {self.label}')
+            print(self.error)
+        else:
+            print(f'Finished generation: {self.label}')
+            self.state = GenerationState.COMPLETED
+
+    async def wait(self):
+        # FIXME: Replace with waiting on a state change async event
+        while not self.is_finished:
+            await asyncio.sleep(0.2)
 
 
 class SourceState(SimpleEnum):
@@ -131,8 +226,8 @@ class Task(BaseModel):
     sources: Optional[list[Source]] = None
     """Source files that need to be modified, extended during planning"""
 
-    planning: Optional[Planning] = None
-    """Planning the implementation"""
+    planning_generations: Optional[list[Generation]] = None
+    """Planning generations"""
 
     plan: Optional[str] = None
     """Step-by-step plan to implement the task"""
@@ -170,8 +265,8 @@ class Task(BaseModel):
         if self.relevant_symbols_generation is not None:
             yield self.relevant_symbols_generation
 
-        if self.planning is not None:
-            yield from self.planning.iter_generations()
+        if self.planning_generations is not None:
+            yield from self.planning_generations
 
         if self.patch_generation is not None:
             yield self.patch_generation
