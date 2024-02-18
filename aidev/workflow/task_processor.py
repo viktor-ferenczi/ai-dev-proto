@@ -275,7 +275,7 @@ class TaskProcessor:
             for source in task.sources
         )
         constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
-        params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(n=1, max_tokens=6000, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen

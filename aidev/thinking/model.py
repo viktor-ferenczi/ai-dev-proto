@@ -71,13 +71,26 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        print(f'Starting generation: {self.label}')
         try:
+            print(f'Starting generation: {self.label}')
+
+            system_tokens = engine.count_tokens(self.system)
+            instruction_tokens = engine.count_tokens(self.instruction)
+            # FIXME: Hardcoded guess for the overhead of the prompt template
+            expected_total_tokens = system_tokens + instruction_tokens + self.params.max_tokens + 100
+            if expected_total_tokens > engine.max_context:
+                self.state = GenerationState.FAILED
+                self.error = f'The expected number of tokens in the context window exceeds the maximum context size of the model: system_tokens={system_tokens}, instruction_tokens={instruction_tokens}, expected_total_tokens={expected_total_tokens}, engine.max_context={engine.max_context}'
+                print(f'Invalid generation: {self.label}')
+                print(self.error)
+                return
+
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
-            print(f'Failed generation: {self.label}')
             self.state = GenerationState.FAILED
             self.error = format_exc()
+            print(f'Failed generation: {self.label}')
+            print(self.error)
         else:
             print(f'Finished generation: {self.label}')
             self.state = GenerationState.COMPLETED

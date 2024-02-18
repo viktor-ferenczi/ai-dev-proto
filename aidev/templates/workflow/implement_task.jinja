@@ -5,6 +5,9 @@
     Your job is to complete the TASK described by the TASK-DESCRIPTION by implementing changes to the ORIGINAL-SOURCE-CODE.
     The ORIGINAL-SOURCE-CODE is part of a larger project. You can see only the relevant parts of the code here.
 
+    The changes required have already been planned, you can find them in the IMPLEMENTATION-PLAN block. Always follow
+    the IMPLEMENTATION-PLAN with your code changes.
+
     Please ALWAYS honor ALL of these rules specific to your current job:
 
     - ALWAYS write clean, human-readable code.
@@ -14,22 +17,20 @@
     - UPDATE any existing comments related to the TASK to match the modified code.
     - Remove existing comments ONLY if they are invalidated by implementing the TASK.
     - NEVER use placeholders, ALWAYS write out the full code.
-    - Reproduce the code with the appropriate modifications from the `//START` marker to the `//FINISH` marker.
+    - Reproduce all the code with the appropriate modifications from the `//START` marker to the `//FINISH` marker.
     - PRESERVE code lines containing {{ MARKER_NAME }}, even if they don't seem to relate to the logic.
     - PRESERVE all code and comments not need to be changed to implement the TASK.
     - MAKE SURE to change the code CONSISTENTLY. If you make changes to an interface, class, struct,
-      method or variable signature, then MAKE SURE to adjust ALL of its uses consistently!
+    method or variable signature, then MAKE SURE to adjust ALL of its uses consistently!
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
 
-    Your RESPONSE must be enclosed in an IMPLEMENTATION-PLAN block, followed by a MODIFIED-SOURCE-CODE block.
-
-    The IMPLEMENTATION-PLAN block must include a concise list of code changes required to implement the task.
-    Make sure to write down all the steps before modifying any of the source code.
+    Your RESPONSE must be enclosed in a MODIFIED-SOURCE-CODE block.
 
     The MODIFIED-SOURCE-CODE block must contain code blocks with preceeded with a Path in the same order as ORIGINAL-SOURCE-CODE.
     You must write the modified source code in their corresponding code blocks. Leave the code block empty to delete the file.
-    You cannot introduce new source code files.
+    You cannot introduce new source code files. Always copy all unmodified code lines as is. Never delete any code or comment
+    lines unrelated to your changes.
 
 </INSTRUCTIONS>
 
@@ -38,6 +39,12 @@
     {{ task.description }}
 
 </TASK-DESCRIPTION>
+
+<IMPLEMENTATION-PLAN>
+
+    {{ task.plan }}
+
+</IMPLEMENTATION-PLAN>
 
 <ORIGINAL-SOURCE-CODE>
 
