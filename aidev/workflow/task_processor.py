@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from .model import Solution, Task
 from .model import TaskState, Source, SourceState, Feedback
+from ..common.config import C
 from ..thinking.model import GenerationState, Generation
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
@@ -15,10 +16,6 @@ from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
 from ..editing.model import Patch, Block, Hunk, MARKER_NAME
 from ..engine.params import GenerationParams, Constraint
-
-SYSTEM_CODING_ASSISTANT = '''\
-You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.
-'''
 
 
 class TaskProcessor:
@@ -166,7 +163,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_json_schema(schema)
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
         await gen.wait()
 
@@ -270,7 +267,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
         params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
         self.dump_task()
@@ -371,7 +368,7 @@ class TaskProcessor:
         )
 
         params = GenerationParams(max_tokens=300, temperature=self.temperature)
-        gen = Generation.new('', SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen
         await gen.wait()

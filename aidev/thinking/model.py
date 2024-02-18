@@ -188,3 +188,13 @@ class Thinking(BaseModel):
             if generation.label == label:
                 return self.get_last_retry(generation)
         return None
+
+    async def wait_for_generations(self):
+        while 1:
+            for generation in self.iter_generations():
+                if not generation.is_finished:
+                    break
+            else:
+                break
+            # FIXME: Wait on change events instead of polling
+            await asyncio.sleep(0.2)

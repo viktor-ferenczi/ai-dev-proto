@@ -2,11 +2,11 @@ import unittest
 from re import escape
 
 from aidev.common.config import C
-from aidev.common.util import set_slow_callback_duration_threshold, join_lines
+from aidev.common.util import set_slow_callback_duration_threshold
 from aidev.editing.model import Document, Block, Hunk, MARKER_NAME
 from aidev.engine.params import GenerationParams, Constraint
 from aidev.engine.vllm_engine import VllmEngine
-from aidev.tests.data import SHOPPING_CART_CS, SYSTEM_CODING_ASSISTANT, ADD_TO_CARD_TODO_RELEVANT_HUNK
+from aidev.tests.data import SHOPPING_CART_CS, ADD_TO_CARD_TODO_RELEVANT_HUNK
 
 
 class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
@@ -23,7 +23,7 @@ class TestEditingLlm(unittest.IsolatedAsyncioTestCase):
         hunk = Hunk.from_document(doc, Block.from_range(i, i + 1))
 
         engine = VllmEngine()
-        system = SYSTEM_CODING_ASSISTANT
+        system = C.SYSTEM_CODING_ASSISTANT
         instruction = f'''\
 Please ALWAYS honor ALL of these general rules:
 - Do NOT apologize.
@@ -98,7 +98,7 @@ Take a deep breath and write the code blocks:
         todo = Hunk.from_document(doc, Block.from_range(i, i + 1))
 
         engine = VllmEngine()
-        system = SYSTEM_CODING_ASSISTANT
+        system = C.SYSTEM_CODING_ASSISTANT
         instruction = f'''\
 Please ALWAYS honor ALL of these general rules:
 - Do NOT apologize.

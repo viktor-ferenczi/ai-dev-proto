@@ -12,7 +12,7 @@ from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, init_logger
 from aidev.engine.engine import Engine
 from aidev.engine.params import GenerationParams, Constraint, ConstraintType
-from aidev.tests.data import crop_text, BOOK, SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
+from aidev.tests.data import crop_text, BOOK, INSTRUCTION_DEDUPLICATE_FILES, QUESTIONS
 
 LOG_REQUESTS = False
 
@@ -83,7 +83,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         params = GenerationParams(max_tokens=2000, temperature=0.2)
 
         print('SYSTEM:')
-        print(SYSTEM_CODING_ASSISTANT)
+        print(C.SYSTEM_CODING_ASSISTANT)
         print()
 
         print('INSTRUCTION:')
@@ -91,7 +91,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         print()
 
         started = time.perf_counter()
-        completions = await self.engine.generate(SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, params)
+        completions = await self.engine.generate(C.SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, params)
         finished = time.perf_counter()
         duration = finished - started
 

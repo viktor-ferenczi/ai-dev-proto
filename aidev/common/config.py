@@ -101,6 +101,9 @@ class Config:
     # Planning
     MAX_PLANNING_STEPS = 10
 
+    # Prompts
+    SYSTEM_CODING_ASSISTANT = 'You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.'
+
     def save(self, path: str):
         with open(path, 'wt') as f:
             toml.dump({name: getattr(self, name) for name in self}, f)

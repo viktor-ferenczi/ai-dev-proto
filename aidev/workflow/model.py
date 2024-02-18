@@ -2,6 +2,7 @@ import os
 from typing import Optional, Iterable, Dict
 from pydantic import BaseModel
 
+from .planning import Planning
 from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum
@@ -127,14 +128,14 @@ class Task(BaseModel):
     relevant_symbols: Optional[list[str]] = None
     """List of the IDs of the relevant symbols required to work on the task"""
 
-    planning_generations: Optional[list[Generation]] = None
-    """Text generations used for planning the implementation"""
+    sources: Optional[list[Source]] = None
+    """Source files that need to be modified, extended during planning"""
+
+    planning: Optional[Planning] = None
+    """Planning the implementation"""
 
     plan: Optional[str] = None
     """Step-by-step plan to implement the task"""
-
-    sources: Optional[list[Source]] = None
-    """Source files that need to be modified, extended during planning"""
 
     patch_generation: Optional[Generation] = None
     """Text generation to actually implement the change to one or more source code hunks at the same time"""
@@ -169,8 +170,8 @@ class Task(BaseModel):
         if self.relevant_symbols_generation is not None:
             yield self.relevant_symbols_generation
 
-        if self.planning_generations is not None:
-            yield from self.planning_generations
+        if self.planning is not None:
+            yield from self.planning.iter_generations()
 
         if self.patch_generation is not None:
             yield self.patch_generation

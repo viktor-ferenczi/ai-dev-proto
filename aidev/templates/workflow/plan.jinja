@@ -10,44 +10,17 @@
     the code changes required to implement and to identify any additional
     source code which needs to be known or get changed to do that.
 
-    Your RESPONSE must adhere to this JSON schema:
+    Your RESPONSE must be concise list of code changes required.
 
-    ```jsonschema
-    {{ response_schema }}
-    ```
-
-    Fill the JSON fields with the following:
-
-    Set the "state" field to "INCOMPLETE" if you need to see more source code related
-    to the TASK in order to fully understand its scope and the code changes required.
-    In this case fill in the "names" field with the list of the symbols you want to be
-    retrieved. These names can be source paths, namespaces, interfaces, classes,
-    structs, records, methods, functions or variables.
-
-    Set the "state" field to "READY" if you have seen all the source code which needs
-    to be known to work on the code changes required to implement the TASK. In this case
-    set the "names" field as an empty list.
+    If you need to implement any new data structures which is expected to be shared by those
+    code changes then implement that data structure in a code block right after the list.
 
 </INSTRUCTIONS>
 
-<TASK>
+<TASK-DESCRIPTION>
 
     {{ task.description }}
 
-</TASK>
-
-{% if facts %}
-    <RELEVANT-SOURCE-CODE>
-
-        {% for fact in facts %}
-
-            ```
-            {{ fact }}
-            ```
-
-        {% endfor %}
-
-    </RELEVANT-SOURCE-CODE>
-{% endif %}
+</TASK-DESCRIPTION>
 
 Now take a deep breath and write your RESPONSE:
