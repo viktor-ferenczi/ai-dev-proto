@@ -16,6 +16,7 @@ from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
 from ..editing.model import Patch, Block, Hunk, MARKER_NAME
 from ..engine.params import GenerationParams, Constraint
+from ..thinking.planning import Planning
 
 
 class TaskProcessor:
@@ -52,6 +53,14 @@ class TaskProcessor:
                     return
 
                 await self.find_relevant_sources()
+                if task.state == TaskState.FAILED:
+                    return
+
+                self.dump_task()
+
+                if task.planning is None:
+                    task.planning = Planning.new()
+                    await task.planning.run(task, C.MAX_PLANNING_ATTEMPTS)
                 if task.state == TaskState.FAILED:
                     return
 

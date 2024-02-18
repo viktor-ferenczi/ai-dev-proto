@@ -1,0 +1,26 @@
+
+- `first_generation_id`: {{ thinking.first_generation_id }}
+- `concluding_id`: {{ thinking.concluding_id }}
+- `conclusion_index`: {{ thinking.conclusion_index }}
+
+<details>
+    <summary>Generations</summary>
+    {% for generation in thinking.generations %}
+
+        ---
+
+        <details>
+            <summary>Generation {{ loop.index }}</summary>
+            {% include 'generation.jinja' with context %}
+        </details>
+    {% endfor %}
+</details>
+
+<details>
+
+    ---
+
+    <summary>Connections</summary>
+    {% set text = thinking.connections | repr %}
+    {% include 'text.jinja' with context %}
+</details>

@@ -1,0 +1,36 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to verify whether the PROPOSED-CODE-CHANGES would solve
+    the TASK below. The TASK is either a code smell or bug which needs
+    to be fixed or a feature or change which needs to be implemented.
+
+    Do NOT implement the TASK. Your job is limited only to determining
+    whether the already PROPOSED-CODE-CHANGES would implement the TASK
+    properly or not.
+
+    Your RESPONSE must conform to this JSON schema:
+
+    ```jsonschema
+    {{ schema }}
+    ```
+
+    - Set the `approve_changes` field to `true` if you think the PROPOSED-CODE-CHANGES
+    - Set the `reasoning` field to a very concise reasoning why this decision was made.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task.description }}
+
+</TASK-DESCRIPTION>
+
+<PROPOSED-CODE-CHANGES>
+
+    {{ proposed_code_changes }}
+
+</PROPOSED-CODE-CHANGES>
+
+Now take a deep breath and write your RESPONSE:

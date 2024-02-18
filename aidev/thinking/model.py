@@ -71,15 +71,15 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        print('Starting generation')
+        print(f'Starting generation: {self.label}')
         try:
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
-            print('Failed generation')
+            print(f'Failed generation: {self.label}')
             self.state = GenerationState.FAILED
             self.error = format_exc()
         else:
-            print('Finished generation')
+            print(f'Finished generation: {self.label}')
             self.state = GenerationState.COMPLETED
 
     async def wait(self):

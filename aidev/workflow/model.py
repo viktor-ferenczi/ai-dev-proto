@@ -2,7 +2,7 @@ import os
 from typing import Optional, Iterable, Dict
 from pydantic import BaseModel
 
-from .planning import Planning
+from aidev.thinking.planning import Planning
 from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum

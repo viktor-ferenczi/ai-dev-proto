@@ -36,21 +36,14 @@
 {% endif %}
 
 
-{% if task.planning_generations %}
+{% if task.planning %}
 
     ---
 
     <details>
-        <summary>Planning generations</summary>
-        {% for generation in task.planning_generations %}
-
-            ---
-
-            <details>
-                <summary>Generation {{ loop.index }}</summary>
-                {% include 'generation.jinja' with context %}
-            </details>
-        {% endfor %}
+        <summary>Planning</summary>
+        {% set thinking = task.planning %}
+        {% include 'thinking.jinja' with context %}
     </details>
 
 {% endif %}

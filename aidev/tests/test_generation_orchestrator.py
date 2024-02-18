@@ -38,13 +38,12 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             description='description',
             branch='branch',
             state=TaskState.PLANNING,
-            planning_generations=[create_generation()],
             feedback_generation=create_generation(),
             sources=[create_source(), create_source()],
         )
         solution.tasks[task.id] = task
 
-        self.assertEqual(6, len(generations))
+        self.assertEqual(5, len(generations))
 
         orchestrator = GenerationOrchestrator(solution)
 

@@ -99,7 +99,7 @@ class Config:
     HASH_SYMBOL_IDS = False
 
     # Planning
-    MAX_PLANNING_STEPS = 10
+    MAX_PLANNING_ATTEMPTS = 16
 
     # Prompts
     SYSTEM_CODING_ASSISTANT = 'You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.'
