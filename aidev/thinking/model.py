@@ -94,11 +94,11 @@ class Connection(SimpleEnum):
     RETRY = 'RETRY'
     """Retry of a generation with invalid result"""
 
-    CONSEQUENCE = 'CONSEQUENCE'
-    """Consequence of reasons"""
-
     COMBINATION = 'COMBINATION'
-    """Combining facts"""
+    """Combination of results"""
+
+    VERIFY = 'VERIFY'
+    """Verification on results"""
 
 
 class Thinking(BaseModel):
@@ -117,8 +117,8 @@ class Thinking(BaseModel):
     concluding_id: Optional[str] = None
     """Concluding generation ID"""
 
-    conclusion_index: Optional[int] = None
-    """Index of the conclusion (accepted completion) in the concluding generation"""
+    concluding_index: Optional[int] = None
+    """Index of the accepted completion in the concluding generation"""
 
     @property
     def conclusion(self) -> Optional[str]:
@@ -126,7 +126,7 @@ class Thinking(BaseModel):
         if self.concluding_id is None:
             return None
         concluding_generation = self.generations[self.concluding_id]
-        return concluding_generation.completions[self.conclusion_index]
+        return concluding_generation.completions[self.concluding_index]
 
     @classmethod
     def new(cls) -> 'Thinking':
@@ -147,24 +147,25 @@ class Thinking(BaseModel):
         self.first_generation_id = generation.id
         self.generations[generation.id] = generation
 
-    def add(self, connection: Connection, successor: Generation, *predecessors: Generation):
+    def __add(self, connection: Connection, successor: Generation, *predecessors: Generation):
+        self.generations[successor.id] = successor
         for predecessor in predecessors:
             self.connections.setdefault(predecessor.id, {})[successor.id] = connection
 
     def retry(self, invalid: Generation, retry: Generation):
-        self.add(Connection.RETRY, retry, invalid)
+        self.__add(Connection.RETRY, retry, invalid)
 
-    def follow(self, consequence: Generation, *reasons: Generation):
-        self.add(Connection.CONSEQUENCE, consequence, *reasons)
+    def combine(self, combination: Generation, *results: Generation):
+        self.__add(Connection.COMBINATION, combination, *results)
 
-    def combine(self, combination: Generation, *facts: Generation):
-        self.add(Connection.COMBINATION, combination, *facts)
+    def verify(self, verification: Generation, *results: Generation):
+        self.__add(Connection.VERIFY, verification, *results)
 
     def conclude(self, conclusion: Generation, completion_index: int):
         assert conclusion.state == GenerationState.COMPLETED
         assert 0 <= completion_index < len(conclusion.completions)
         self.concluding_id = conclusion.id
-        self.conclusion_index = completion_index
+        self.concluding_index = completion_index
 
     def get_last_retry(self, generation: Generation) -> Generation:
         while generation.state == GenerationState.COMPLETED:

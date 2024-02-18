@@ -22,7 +22,9 @@ VERIFY_PLAN_RESPONSE_SCHEMA = VerifyPlanResponse.model_json_schema()
 
 class Planning(Thinking):
 
-    async def run(self, task: 'Task', max_attempts: int = 10) -> bool:
+    async def run(self, task: 'Task', max_attempts: int = 10):
+        from ..workflow.model import TaskState
+
         previous_plan_gen: Optional[Generation] = None
 
         for attempt in range(max_attempts):
@@ -41,7 +43,9 @@ class Planning(Thinking):
 
             await self.wait_for_generations()
             if plan_gen.state != GenerationState.COMPLETED:
-                return False
+                task.state = TaskState.FAILED
+                task.error = 'Planning generation failed'
+                return
 
             for plan_index, completion in enumerate(plan_gen.completions):
 
@@ -54,17 +58,20 @@ class Planning(Thinking):
 
                 constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)
                 params = GenerationParams(n=16, beam_search=True, max_tokens=500, temperature=0.5, constraint=constraint)
-                gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-                self.start(gen)
+                verify_gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+                self.verify(verify_gen, plan_gen)
                 await self.wait_for_generations()
-                if gen.state != GenerationState.COMPLETED:
-                    return False
+                if verify_gen.state != GenerationState.COMPLETED:
+                    task.state = TaskState.FAILED
+                    task.error = f'Plan verification generation failed: {verify_gen.error}'
+                    return
 
-                vote = sum(json.loads(response)['approve_changes'] for response in gen.completions)
+                vote = sum(json.loads(response)['approve_changes'] for response in verify_gen.completions)
                 if vote >= (params.n + 1) // 2:
                     task.plan = completion
                     self.concluding_id = plan_gen.id
-                    self.conclusion_index = plan_index
-                    return True
+                    self.concluding_index = plan_index
+                    return
 
-        return False
+        task.state = TaskState.FAILED
+        task.error = 'Failed to plan code changes (max attempts)'

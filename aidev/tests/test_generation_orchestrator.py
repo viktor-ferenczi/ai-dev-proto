@@ -19,7 +19,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         generations: list[Generation] = []
 
         def create_generation():
-            generation = Generation.new('', 'You are a helpful C# coding assistant.', '''
+            generation = Generation.new('test', 'You are a helpful C# coding assistant.', '''
                     Write a C# 10 console program to print the integers from 1 to 10, each one on a separate line.
                     Write only the code and nothing else. Do not explain, do not add source code comments.
                 ''', GenerationParams(max_tokens=150, temperature=0.2))

@@ -172,7 +172,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_json_schema(schema)
         params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('find_relevant_symbols', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
         await gen.wait()
 
@@ -276,7 +276,7 @@ class TaskProcessor:
         )
         constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
         params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
         self.dump_task()
@@ -377,7 +377,7 @@ class TaskProcessor:
         )
 
         params = GenerationParams(max_tokens=300, temperature=self.temperature)
-        gen = Generation.new('', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen
         await gen.wait()
