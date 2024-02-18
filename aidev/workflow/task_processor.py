@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from .model import Solution, Task, GenerationState, Generation
 from .model import TaskState, Source, Feedback
+from ..common.async_helpers import AsyncPool
 from ..common.config import C
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
@@ -17,8 +18,8 @@ from ..engine.params import GenerationParams, Constraint
 
 
 class VerifyPlanResponse(BaseModel):
-    approve_changes: bool
     reasoning: str
+    approve_changes: bool
 
 
 VERIFY_PLAN_RESPONSE_SCHEMA = VerifyPlanResponse.model_json_schema()
@@ -37,6 +38,7 @@ class TaskProcessor:
     async def run(self):
         async with self.wc:
             self.wc.ensure_branch(self.task.branch)
+            self.wc.roll_back_changes('.')
             await self.drive_through_states()
 
     async def drive_through_states(self):
@@ -272,7 +274,9 @@ class TaskProcessor:
             params = GenerationParams(n=12, beam_search=True, max_tokens=1000, temperature=0.7)
             plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
             task.planning_generations.append(plan_gen)
+            self.dump_task()
             await plan_gen.wait()
+            self.dump_task()
             if plan_gen.state != GenerationState.COMPLETED:
                 task.state = TaskState.FAILED
                 task.error = 'Planning generation failed'
@@ -288,7 +292,7 @@ class TaskProcessor:
                 )
 
                 constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)
-                params = GenerationParams(n=11, max_tokens=500, temperature=0.5, constraint=constraint)
+                params = GenerationParams(n=12, max_tokens=1000, temperature=0.5, constraint=constraint)
                 verify_gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
                 task.planning_generations.append(verify_gen)
                 await verify_gen.wait()
@@ -298,7 +302,7 @@ class TaskProcessor:
                     return
 
                 vote = sum(json.loads(response)['approve_changes'] for response in verify_gen.completions)
-                if vote >= (params.n + 1) // 2:
+                if vote >= params.n * 2 / 3:
                     task.plan = completion
                     self.concluding_id = plan_gen.id
                     self.concluding_index = plan_index
@@ -321,70 +325,102 @@ class TaskProcessor:
             MARKER_NAME=MARKER_NAME,
         )
 
-        constraint = Constraint.from_regex(rf'(Path|New): `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n')
-        params = GenerationParams(n=1, max_tokens=6000, temperature=self.temperature, constraint=constraint)
+        constraint = Constraint.from_regex(rf'((Path|New): `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)+')
+        params = GenerationParams(n=4, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
         self.dump_task()
         await gen.wait()
+        self.dump_task()
 
         if gen.state == GenerationState.FAILED:
             task.state = TaskState.FAILED
             task.error = f'Failed to implement the task'
             return
 
-        completion = gen.completions[0]
+        task.integration_generations = []
+
+        for i, completion in enumerate(gen.completions):
+            print(f'Trying to apply change from completion {i}')
+            error = await self.apply_code_changes(completion)
+            if not task.is_wip:
+                return
+            if not error:
+                break
+            self.wc.roll_back_changes('.')
+
+        task.state = TaskState.TESTING
+
+    async def apply_code_changes(self, completion: str) -> str:
+        task = self.task
 
         completion_lines = completion.split('\n')
-
-        task.integration_generations = []
 
         try:
             code_blocks = iter_code_blocks(completion_lines)
         except ValueError as e:
-            task.state = TaskState.FAILED
-            task.error = f'Invalid code block(s) in completion: {e}'
-            return
+            return f'Invalid code block(s) in completion: {e}'
 
-        for i, j in code_blocks:
+        paths_to_stage = []
 
-            modify = False
-            path = ''
-            for k in range(i - 1, -1, -1):
-                line = completion_lines[k].strip()
-                if not line:
+        async with AsyncPool() as pool:
+            for i, j in code_blocks:
+                print(f'Completion code block {i}:{j}')
+
+                modify = False
+                create = False
+
+                path = ''
+                for k in range(i - 1, -1, -1):
+                    line = completion_lines[k].strip()
+                    if not line:
+                        continue
+                    modify = line.startswith('Path: `') and line.endswith('`')
+                    create = line.startswith('New: `') and line.endswith('`')
+                    if modify or create:
+                        path = line.split(': `', 1)[1][:-1]
+                    break
+
+                if not path:
+                    return f'Cannot find path line before completion code block (ignored): {i}:{j}'
+
+                if modify and path not in task.paths:
+                    print(f'WARN: The implementation wants to modify an unknown file (ignored): {path}')
                     continue
-                modify = line.startswith('Path:')
-                create = line.startswith('New:')
-                if modify or create:
-                    path = line.split(':', 1)[1].strip()
-                break
-            if not path:
-                task.state = TaskState.FAILED
-                task.error = f'Cannot find path line before completion code block: {i}:{j}'
-                return
 
-            full_path = os.path.join(self.wc.project_dir, path)
+                if create and path in task.paths:
+                    print(f'The implementation wants to create a file which already exists (ignored): {path}')
+                    continue
 
-            code_lines = completion_lines[i + 1:j]
-            code = join_lines(code_lines)
+                full_path = os.path.join(self.wc.project_dir, path)
 
-            if code.strip():
-                if modify:
-                    document = Document.from_file(self.wc.project_dir, path)
-                    await self.reintegrate_code_change(document, code)
-                else:
-                    write_text_file(full_path, code)
-                self.wc.stage_change(path)
-            elif modify and os.path.exists(full_path):
-                os.remove(full_path)
-                self.wc.stage_change(path)
+                code_lines = completion_lines[i + 1:j]
+                code = join_lines(code_lines)
 
-            if not task.is_wip:
-                return
+                if code.strip():
+                    if modify:
+                        print(f'Modify: {path}')
+                        document = Document.from_file(self.wc.project_dir, path)
+                        if len(pool) >= 16:
+                            await pool.wait()
+                        pool.run(self.reintegrate_code_change(document, code))
+                    else:
+                        print(f'Create: {path}')
+                        write_text_file(full_path, code)
+                    paths_to_stage.append(path)
+                elif modify and os.path.exists(full_path):
+                    print(f'Delete: {path}')
+                    os.remove(full_path)
+                    paths_to_stage.append(path)
 
-        task.state = TaskState.TESTING
+                if not task.is_wip:
+                    return task.error
+
+        for path in paths_to_stage:
+            self.wc.stage_change(path)
+
+        return ''
 
     async def reintegrate_code_change(self, document: Document, modifications: str):
         task = self.task
@@ -397,10 +433,11 @@ class TaskProcessor:
             'reintegrate_change',
             original_code_block=document.code_block,
             modified_code_block=modified_code_block,
+            code_block_type=document.code_block_type,
         )
 
         constraint = Constraint.from_regex(rf'```{document.code_block_type}\n(\n|[^`].*?\n)+```\n\n')
-        params = GenerationParams(n=1, max_tokens=6000, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('reintegrate_change', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.integration_generations.append(gen)
 
@@ -462,7 +499,7 @@ class TaskProcessor:
             error=replace_tripple_backquote(error),
         )
 
-        params = GenerationParams(max_tokens=300, temperature=self.temperature)
+        params = GenerationParams(max_tokens=500, temperature=self.temperature)
         gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen

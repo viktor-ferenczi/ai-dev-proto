@@ -77,18 +77,6 @@ class Generation(BaseModel):
     async def run_on(self, engine: Engine):
         try:
             print(f'Starting generation: {self.label}')
-
-            system_tokens = engine.count_tokens(self.system)
-            instruction_tokens = engine.count_tokens(self.instruction)
-            # FIXME: Hardcoded guess for the overhead of the prompt template
-            expected_total_tokens = system_tokens + instruction_tokens + self.params.max_tokens + 100
-            if expected_total_tokens > engine.max_context:
-                self.state = GenerationState.FAILED
-                self.error = f'The expected number of tokens in the context window exceeds the maximum context size of the model: system_tokens={system_tokens}, instruction_tokens={instruction_tokens}, expected_total_tokens={expected_total_tokens}, engine.max_context={engine.max_context}'
-                print(f'Invalid generation: {self.label}')
-                print(self.error)
-                return
-
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
             self.state = GenerationState.FAILED
@@ -274,8 +262,8 @@ class Task(BaseModel):
         if self.patch_generation is not None:
             yield self.patch_generation
 
-        if self.task.integration_generations is not None:
-            yield from self.task.integration_generations
+        if self.integration_generations is not None:
+            yield from self.integration_generations
 
         if self.feedback_generation is not None:
             yield self.feedback_generation

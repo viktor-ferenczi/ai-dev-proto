@@ -31,6 +31,6 @@ class Constraint(BaseModel):
 class GenerationParams(BaseModel):
     n: int = 1
     use_beam_search: bool = False
-    max_tokens: int = 256
+    max_tokens: int = -1  # Negative number means let it generate up to the max context size of the model
     temperature: float = 0.0  # Keep the default temperature at zero, that's required when beam search is turned on
     constraint: Optional[Constraint] = None

@@ -21,6 +21,7 @@
     - PRESERVE all code and comments not need to be changed to implement the TASK.
     - NEVER delete any code or comment lines unrelated to your changes.
     - MAKE SURE to change the code CONSISTENTLY. If you make changes to an interface, class, struct,
+    - ADD the necessary using statements at the top to import the namespaces used by any newly added code.
     method or variable signature, then MAKE SURE to adjust ALL of its uses consistently!
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
@@ -57,7 +58,7 @@
         {% set doc = source.document %}
         {% set hunk = source.relevant %}
         {% set path = doc.path %}
-        {% set code_block = hunk.code_block_start_finish %}
+        {% set code_block = hunk.code_block %}
         {% include 'code_block.jinja' with context %}
 
     {% endfor %}

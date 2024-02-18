@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from vllm_client import AsyncVllmClient, SamplingParams
 
 from .engine import Engine
-from .params import GenerationParams, Constraint, ConstraintType
+from .params import GenerationParams, ConstraintType
 from ..common.config import C
 from ..common.util import get_prompt_template_for_model
 
@@ -44,9 +44,23 @@ class VllmEngine(Engine):
 
         prompt = self.prompt_template.render(messages=messages)
 
+        if params.max_tokens >= 0:
+            max_tokens = params.max_tokens
+        else:
+            max_tokens = self.max_context - self.tokenizer.count_tokens(prompt) - 2
+
+        system_tokens = self.count_tokens(system)
+        instruction_tokens = self.count_tokens(instruction)
+        prompt_tokens = self.count_tokens(prompt)
+        total_tokens = prompt_tokens + max_tokens
+        print(f'system_tokens={system_tokens}, instruction_tokens={instruction_tokens}, prompt_tokens={prompt_tokens}, max_tokens={max_tokens}, total_tokens={total_tokens}')
+
+        if total_tokens > self.max_context - 2:
+            raise ValueError(f'Maximum context size exceeded: system_tokens={system_tokens}, instruction_tokens={instruction_tokens}, prompt_tokens={prompt_tokens}, max_tokens={max_tokens}, total_tokens={total_tokens}')
+
         sampling_params = SamplingParams(
             n=params.n,
-            max_tokens=params.max_tokens,
+            max_tokens=max_tokens,
             temperature=params.temperature,
             use_beam_search=params.use_beam_search,
         )

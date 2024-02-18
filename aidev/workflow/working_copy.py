@@ -34,10 +34,6 @@ class WorkingCopy:
 
     async def __aenter__(self):
         await self.lock.acquire()
-
-        if self.has_changes():
-            raise IOError(f'This working copy folder has unexpected changes: {self.project_dir}')
-
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -103,7 +99,8 @@ class WorkingCopy:
         if not self.has_repository:
             return
 
-        self.must_run_command('roll back changes', ["git", "checkout", path])
+        self.must_run_command('reset staged changes', ["git", "reset", path])
+        self.must_run_command('roll back unstaged changes', ["git", "checkout", path])
 
     def commit(self, message: str):
         if not self.has_repository:

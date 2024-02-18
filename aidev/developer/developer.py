@@ -29,6 +29,7 @@ class Developer:
         self.project.clean()
 
         self.project.ensure_branch(branch_name)
+        self.project.roll_back_changes('.')
 
         self.project.format_code()
         self.project.stage_change('.')
