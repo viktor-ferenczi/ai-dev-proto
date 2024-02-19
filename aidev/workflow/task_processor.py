@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import traceback
 from typing import Set, List
 
@@ -13,8 +12,8 @@ from ..common.config import C
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
 from ..code_map.parsers import detect_parser
-from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines, read_text_file
-from ..editing.model import Patch, Block, Hunk, MARKER_NAME, Document
+from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines
+from ..editing.model import Patch, Block, Hunk, Document
 from ..engine.params import GenerationParams, Constraint
 
 
@@ -320,10 +319,12 @@ class TaskProcessor:
             task.error = f'No source files to change'
             return
 
+        source_paths = {source.document.path for source in task.sources}
+
         instruction = render_workflow_template(
             'implement_task',
             task=task,
-            MARKER_NAME=MARKER_NAME,
+            source_paths=source_paths,
         )
 
         # Disabled due to https://github.com/outlines-dev/outlines/issues/680
@@ -333,9 +334,9 @@ class TaskProcessor:
         #     for source in task.sources
         # )
         # new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)?'
-        # pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}END\n'
+        # pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}'
 
-        pattern = rf'(Path: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)+(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)*'
+        pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+(New: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)*'
 
         constraint = Constraint.from_regex(pattern)
         params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
@@ -355,7 +356,7 @@ class TaskProcessor:
 
         for i, completion in enumerate(gen.completions):
             print(f'Trying to apply change from completion {i}')
-            error = await self.apply_code_changes(completion)
+            error = await self.apply_code_changes(completion, source_paths)
             if not task.is_wip:
                 return
             if not error:
@@ -364,7 +365,7 @@ class TaskProcessor:
 
         task.state = TaskState.TESTING
 
-    async def apply_code_changes(self, completion: str) -> str:
+    async def apply_code_changes(self, completion: str, source_paths: Set[str]) -> str:
         task = self.task
 
         completion_lines = completion.split('\n')
@@ -398,7 +399,7 @@ class TaskProcessor:
                 if not path:
                     return f'Cannot find path line before completion code block (ignored): {i}:{j}'
 
-                if modify and path not in task.paths:
+                if modify and path not in source_paths:
                     print(f'WARN: The implementation wants to modify an unknown file (ignored): {path}')
                     continue
 
