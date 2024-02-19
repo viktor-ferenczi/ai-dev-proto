@@ -2,12 +2,11 @@
 
 <INSTRUCTIONS>
 
-    Your job is to verify whether the PROPOSED-CODE-CHANGES would solve
-    the TASK below. The TASK is either a code smell or bug which needs
-    to be fixed or a feature or change which needs to be implemented.
+    Your job is to verify whether the IMPLEMENTATION-PLAN would solve the TASK described by the TASK-DESCRIPTION.
+    The TASK is either a code smell or bug which needs to be fixed or a feature or change which needs to be implemented.
 
     Do NOT implement the TASK. Your job is limited only to determining
-    whether the already PROPOSED-CODE-CHANGES would implement the TASK
+    whether the already IMPLEMENTATION-PLAN would implement the TASK
     properly or not.
 
     Your RESPONSE must conform to this JSON schema:
@@ -18,8 +17,8 @@
 
     Work on your response by following these steps:
 
-    1. Set the `reasoning` field to a very concise reasoning why this decision was made.
-    2. Set the `approve_changes` field to `true` if you think the PROPOSED-CODE-CHANGE.
+    1. Set the `reasoning` field to explain why the IMPLEMENTATION-PLAN is approved or not approved.
+    2. Set the `approve_changes` field to `true` ONLY if you approve the IMPLEMENTATION-PLAN, otherwise set this field to `false`.
 
     ALWAYS follow these rules:
 
@@ -39,10 +38,10 @@
 
 </TASK-DESCRIPTION>
 
-<PROPOSED-CODE-CHANGES>
+<IMPLEMENTATION-PLAN>
 
-    {{ proposed_code_changes }}
+    {{ implementation_plan }}
 
-</PROPOSED-CODE-CHANGES>
+</IMPLEMENTATION-PLAN>
 
 Now take a deep breath and write your RESPONSE:

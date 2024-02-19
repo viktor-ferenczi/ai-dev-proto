@@ -288,7 +288,7 @@ class TaskProcessor:
                     'verify_plan',
                     task=task,
                     schema=VERIFY_PLAN_RESPONSE_SCHEMA,
-                    proposed_code_changes=completion
+                    implementation_plan=completion
                 )
 
                 constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)

@@ -1,0 +1,50 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to decide which of the implementation plans solve the TASK described by the TASK-DESCRIPTION better.
+    The TASK is either a code smell or bug which needs to be fixed or a feature or change which needs to be implemented.
+    Do NOT implement the TASK. Your job is limited only to determining which of the implementation plans is better.
+
+    Implementation plans to choose from:
+    - IMPLEMENTATION-PLAN-ALPHA
+    - IMPLEMENTATION-PLAN-BETA
+
+    Your RESPONSE must conform to this JSON schema:
+
+    ```jsonschema
+    {{ schema }}
+    ```
+
+    Work on your response by following these steps:
+
+    1. Set the `reasoning` field to explain why the PROPOSED-CODE-CHANGE is approved or not approved.
+    2. Set the `better_implementation_plan` field to either "ALPHA" or "BETA", which plan is better.
+
+    ALWAYS follow these rules:
+
+    - Prefer the implementation plan which proposes a sound, complete implementation.
+    - Prefer the implementation plan which results in cleaner and easier to maintain code.
+    - Prefer the implementation plan which results in code which is more readable for humans.
+    - Prefer the implementation plan which clearly describes the required code changes.
+    - Dislike the implementation plan which proposes a hackish or complicated solution.
+    - Dislike the implementation plan which proposes an incomplete solution.
+    - Dislike the implementation plan which proposes the removal of existing functionality, unless it is explicitly requested by the TASK.
+    - Dislike the implementation plan which proposes the addition of new functionality, unless it is explicitly requested by the TASK.
+    - Should all the above would be equal for both implementations, then prefer the simpler one.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task.description }}
+
+</TASK-DESCRIPTION>
+
+<IMPLEMENTATION-PLAN-ALPHA>
+
+    {{ implementation_plan }}
+
+</IMPLEMENTATION-PLAN-ALPHA>
+
+Now take a deep breath and write your RESPONSE:
