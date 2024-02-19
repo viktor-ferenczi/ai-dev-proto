@@ -326,12 +326,17 @@ class TaskProcessor:
             MARKER_NAME=MARKER_NAME,
         )
 
-        existing_files_pattern = ''.join(
-            rf'(Path: `{re.escape(source.document.path)}`\n\n```{re.escape(source.document.code_block_type)}\n(\n|[^`].*?\n)*```\n\n)?'
-            for source in task.sources
-        )
-        new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)?'
-        pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}END\n'
+        # Disabled due to https://github.com/outlines-dev/outlines/issues/680
+        # Waiting on a fix or changing to a Lark grammar: https://github.com/outlines-dev/outlines/pull/676
+        # existing_files_pattern = ''.join(
+        #     rf'(Path: `{re.escape(source.document.path)}`\n\n```{re.escape(source.document.code_block_type)}\n(\n|[^`].*?\n)*```\n\n)?'
+        #     for source in task.sources
+        # )
+        # new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)?'
+        # pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}END\n'
+
+        pattern = rf'(Path: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)+(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)*'
+
         constraint = Constraint.from_regex(pattern)
         params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
