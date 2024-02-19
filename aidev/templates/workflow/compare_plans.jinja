@@ -18,8 +18,8 @@
 
     Work on your response by following these steps:
 
-    1. Set the `reasoning` field to explain why the PROPOSED-CODE-CHANGE is approved or not approved.
-    2. Set the `better_implementation_plan` field to either "ALPHA" or "BETA", which plan is better.
+    1. Set the `reasoning` field to explain why one implementation plan is better than the other.
+    2. Set the `better_implementation_plan` field to "ALPHA" is IMPLEMENTATION-PLAN-ALPHA is better, otherwise set it to "BETA".
 
     ALWAYS follow these rules:
 
@@ -43,8 +43,14 @@
 
 <IMPLEMENTATION-PLAN-ALPHA>
 
-    {{ implementation_plan }}
+    {{ implementation_plan_alpha }}
 
 </IMPLEMENTATION-PLAN-ALPHA>
+
+<IMPLEMENTATION-PLAN-BETA>
+
+    {{ implementation_plan_beta }}
+
+</IMPLEMENTATION-PLAN-BETA>
 
 Now take a deep breath and write your RESPONSE:

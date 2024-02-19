@@ -17,12 +17,12 @@ from ..editing.model import Patch, Block, Hunk, Document
 from ..engine.params import GenerationParams, Constraint
 
 
-class VerifyPlanResponse(BaseModel):
+class ComparePlansResponse(BaseModel):
     reasoning: str
-    approve_changes: bool
+    better_implementation_plan: str
 
 
-VERIFY_PLAN_RESPONSE_SCHEMA = VerifyPlanResponse.model_json_schema()
+COMPARE_PLANS_RESPONSE_SCHEMA = ComparePlansResponse.model_json_schema()
 
 
 class TaskProcessor:
@@ -31,9 +31,6 @@ class TaskProcessor:
         self.solution: Solution = solution
         self.task: Task = task
         self.wc: WorkingCopy = working_copy
-
-        # FIXME: Make this varying
-        self.temperature: float = 0.2
 
     async def run(self):
         async with self.wc:
@@ -177,7 +174,7 @@ class TaskProcessor:
             schema=schema,
         )
         constraint = Constraint.from_json_schema(schema)
-        params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(max_tokens=1000, temperature=0.2, constraint=constraint)
         gen = Generation.new('find_relevant_symbols', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
         await gen.wait()
@@ -266,50 +263,53 @@ class TaskProcessor:
         task = self.task
         task.planning_generations = []
 
-        for attempt in range(C.MAX_PLANNING_ATTEMPTS):
-            instruction = render_workflow_template(
-                'plan',
-                task=task,
-            )
-            params = GenerationParams(n=8, beam_search=True, max_tokens=1000, temperature=0.7)
-            plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-            task.planning_generations.append(plan_gen)
-            self.dump_task()
-            await plan_gen.wait()
-            self.dump_task()
-            if plan_gen.state != GenerationState.COMPLETED:
-                task.state = TaskState.FAILED
-                task.error = 'Planning generation failed'
-                return
+        instruction = render_workflow_template(
+            'plan',
+            task=task,
+        )
+        params = GenerationParams(n=8, beam_search=True, max_tokens=1000, temperature=0.7)
+        plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        task.planning_generations.append(plan_gen)
+        self.dump_task()
+        await plan_gen.wait()
+        self.dump_task()
+        if plan_gen.state != GenerationState.COMPLETED:
+            task.state = TaskState.FAILED
+            task.error = 'Planning generation failed'
+            return
 
-            for plan_index, completion in enumerate(plan_gen.completions):
-
+        better_indices = []
+        completion_indices = list(range(params.n))
+        while len(completion_indices) > 1:
+            for i, j in zip(completion_indices[::2], completion_indices[1::2]):
                 instruction = render_workflow_template(
-                    'verify_plan',
+                    'compare_plans',
                     task=task,
-                    schema=VERIFY_PLAN_RESPONSE_SCHEMA,
-                    implementation_plan=completion
+                    schema=COMPARE_PLANS_RESPONSE_SCHEMA,
+                    implementation_plan_alpha=plan_gen.completions[i],
+                    implementation_plan_beta=plan_gen.completions[j],
                 )
-
-                constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)
-                params = GenerationParams(n=6, max_tokens=1000, temperature=0.5, constraint=constraint)
-                verify_gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-                task.planning_generations.append(verify_gen)
-                await verify_gen.wait()
-                if verify_gen.state != GenerationState.COMPLETED:
+                constraint = Constraint.from_json_schema(COMPARE_PLANS_RESPONSE_SCHEMA)
+                params = GenerationParams(n=11, max_tokens=1000, temperature=0.5, constraint=constraint)
+                compare_gen = Generation.new('compare_plans', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+                task.planning_generations.append(compare_gen)
+                self.dump_task()
+                await compare_gen.wait()
+                self.dump_task()
+                if compare_gen.state != GenerationState.COMPLETED:
                     task.state = TaskState.FAILED
-                    task.error = f'Plan verification generation failed: {verify_gen.error}'
+                    task.error = f'Plan comparison generation failed: {compare_gen.error}'
                     return
 
-                vote = sum(json.loads(response)['approve_changes'] for response in verify_gen.completions)
-                if vote >= params.n * 2 / 3:
-                    task.plan = completion
-                    self.concluding_id = plan_gen.id
-                    self.concluding_index = plan_index
-                    return
+                vote = sum(json.loads(response)['better_implementation_plan'] == 'ALPHA' for response in compare_gen.completions)
+                better_indices.append(i if vote >= params.n // 2 else j)
 
-        task.state = TaskState.FAILED
-        task.error = 'Failed to plan code changes (max attempts)'
+            completion_indices = better_indices
+            better_indices = []
+
+        assert len(completion_indices) == 1
+        task.plan = plan_gen.completions[completion_indices[0]]
+        task.state = TaskState.CODING
 
     async def code_task(self):
         task = self.task
@@ -339,7 +339,7 @@ class TaskProcessor:
         pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+(New: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)*'
 
         constraint = Constraint.from_regex(pattern)
-        params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(n=8, beam_search=True, temperature=0.2, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
@@ -459,7 +459,7 @@ class TaskProcessor:
         )
 
         constraint = Constraint.from_regex(rf'```{document.code_block_type}\n(\n|[^`].*?\n)+```\n\n')
-        params = GenerationParams(n=4, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(n=4, temperature=0.2, constraint=constraint)
         gen = Generation.new('reintegrate_change', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.integration_generations.append(gen)
 
@@ -521,7 +521,7 @@ class TaskProcessor:
             error=replace_tripple_backquote(error),
         )
 
-        params = GenerationParams(max_tokens=500, temperature=self.temperature)
+        params = GenerationParams(max_tokens=500, temperature=0.2)
         gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen
