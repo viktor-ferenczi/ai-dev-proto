@@ -327,17 +327,7 @@ class TaskProcessor:
             source_paths=source_paths,
         )
 
-        # Disabled due to https://github.com/outlines-dev/outlines/issues/680
-        # Waiting on a fix or changing to a Lark grammar: https://github.com/outlines-dev/outlines/pull/676
-        # existing_files_pattern = ''.join(
-        #     rf'(Path: `{re.escape(source.document.path)}`\n\n```{re.escape(source.document.code_block_type)}\n(\n|[^`].*?\n)*```\n\n)?'
-        #     for source in task.sources
-        # )
-        # new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)?'
-        # pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}'
-
-        pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+(New: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)*'
-
+        pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+'
         constraint = Constraint.from_regex(pattern)
         params = GenerationParams(n=8, beam_search=True, temperature=0.2, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
@@ -382,30 +372,17 @@ class TaskProcessor:
             for i, j in code_blocks:
                 print(f'Completion code block {i}:{j}')
 
-                modify = False
-                create = False
-
                 path = ''
                 for k in range(i - 1, -1, -1):
                     line = completion_lines[k].strip()
                     if not line:
                         continue
-                    modify = line.startswith('Path: `') and line.endswith('`')
-                    create = line.startswith('New: `') and line.endswith('`')
-                    if modify or create:
+                    if line.startswith('Path: `') and line.endswith('`'):
                         path = line.split(': `', 1)[1][:-1]
                     break
 
                 if not path:
                     return f'Cannot find path line before completion code block (ignored): {i}:{j}'
-
-                if modify and path not in source_paths:
-                    print(f'WARN: The implementation wants to modify an unknown file (ignored): {path}')
-                    continue
-
-                if create and path in task.paths:
-                    print(f'The implementation wants to create a file which already exists (ignored): {path}')
-                    continue
 
                 if path in paths_seen:
                     print(f'Ignoring repeated path: {path}')
@@ -414,12 +391,16 @@ class TaskProcessor:
                 paths_seen.add(path)
 
                 full_path = os.path.join(self.wc.project_dir, path)
+                dir_path = os.path.dirname(full_path)
+                exists = os.path.exists(full_path)
 
                 code_lines = completion_lines[i + 1:j]
                 code = join_lines(code_lines)
 
+                os.makedirs(dir_path, exist_ok=True)
+
                 if code.strip():
-                    if modify:
+                    if exists:
                         print(f'Modify: {path}')
                         document = Document.from_file(self.wc.project_dir, path)
                         if len(pool) >= 16:
@@ -429,7 +410,7 @@ class TaskProcessor:
                         print(f'Create: {path}')
                         write_text_file(full_path, code)
                     paths_to_stage.append(path)
-                elif modify and os.path.exists(full_path):
+                elif exists:
                     print(f'Delete: {path}')
                     os.remove(full_path)
                     paths_to_stage.append(path)

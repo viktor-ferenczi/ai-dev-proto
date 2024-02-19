@@ -22,7 +22,9 @@
     - MAKE SURE to change the code CONSISTENTLY. If you make changes to an interface, class, struct,
     - ADD the necessary using statements at the top to import the necessary namespaces used by the modified code.
     - MAKE SURE to adjust all uses of any method or variable which has its signature or type changed.
-    - MAKE SURE to add the using statements to import the necessary namespaces at the top of any newly created files.
+    - MAKE SURE to add the using statements to import the necessary namespaces at the top of any newly created source files.
+    - MAKE SURE to add define the right namespace in any newly created C# source files.
+    - Do NOT repeat the same source file.
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
 
@@ -31,24 +33,19 @@
     code blocks corresponding to original source files you do not need to change to implement the code changes
     required to implement the TASK.
 
-    You may introduce new source file(s) as needed by a "New:" line with the new file's solution relative path and
-    a subsequent code block with the full contents of the newly created source file. It is similar to the "Path:"
-    lines and subsequent code blocks in the ORIGINAL-SOURCE-CODE, but marks the file as "New:" instead of "Path:".
-    New files can only be introduced after the changes to the existing files, therefore "New:" blocks can only
-    be placed after the "Path:" blocks.
-
     To delete a source file leave its corresponding code block empty.
 
     If you skip a source file it will remain unmodified.
 
-    You can modify or delete only these files (paths):
+    You can modify or delete these existing files (paths):
 
     {% for path in source_paths %}
         - `{{ path }}`
     {% endfor %}
 
-    Introduce new files only if really needed. For new files use the file naming convention matching the paths
-    of the .NET Core solution files.
+    To create a new source file just state its Path: and provide the code block with its contents.
+    Introduce new source files only if really needed. For new files use the same file naming convention
+    as the other source files of the .NET Core Web server project are using.
 
     Write each modified or new file only once, then finish your response.
 
