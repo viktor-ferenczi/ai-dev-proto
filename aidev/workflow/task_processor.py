@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import traceback
 from typing import Set, List
 
@@ -271,7 +272,7 @@ class TaskProcessor:
                 'plan',
                 task=task,
             )
-            params = GenerationParams(n=12, beam_search=True, max_tokens=1000, temperature=0.7)
+            params = GenerationParams(n=8, beam_search=True, max_tokens=1000, temperature=0.7)
             plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
             task.planning_generations.append(plan_gen)
             self.dump_task()
@@ -292,7 +293,7 @@ class TaskProcessor:
                 )
 
                 constraint = Constraint.from_json_schema(VERIFY_PLAN_RESPONSE_SCHEMA)
-                params = GenerationParams(n=12, max_tokens=1000, temperature=0.5, constraint=constraint)
+                params = GenerationParams(n=6, max_tokens=1000, temperature=0.5, constraint=constraint)
                 verify_gen = Generation.new('verify_plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
                 task.planning_generations.append(verify_gen)
                 await verify_gen.wait()
@@ -325,15 +326,13 @@ class TaskProcessor:
             MARKER_NAME=MARKER_NAME,
         )
 
-
-        existing_files_pattern=''.join(
-            rf'(Path: `{source.document.path}`\n\n```{source.document.code_block_type}\n(\n|[^`].*?\n)*```\n\n)?'
+        existing_files_pattern = ''.join(
+            rf'(Path: `{re.escape(source.document.path)}`\n\n```{re.escape(source.document.code_block_type)}\n(\n|[^`].*?\n)*```\n\n)?'
             for source in task.sources
         )
-
-        new_files_pattern=rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n){{0,5}}'
-        constraint = Constraint.from_regex(f'{existing_files_pattern}{new_files_pattern}')
-        params = GenerationParams(n=4, temperature=self.temperature, constraint=constraint)
+        new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n){{0,5}}'
+        constraint = Constraint.from_regex(f'{existing_files_pattern}{new_files_pattern}END\n')
+        params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
