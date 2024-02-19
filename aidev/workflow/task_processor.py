@@ -330,8 +330,9 @@ class TaskProcessor:
             rf'(Path: `{re.escape(source.document.path)}`\n\n```{re.escape(source.document.code_block_type)}\n(\n|[^`].*?\n)*```\n\n)?'
             for source in task.sources
         )
-        new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n){{0,5}}'
-        constraint = Constraint.from_regex(f'{existing_files_pattern}{new_files_pattern}END\n')
+        new_files_pattern = rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)?'
+        pattern = rf'{existing_files_pattern}{new_files_pattern}{new_files_pattern}{new_files_pattern}END\n'
+        constraint = Constraint.from_regex(pattern)
         params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
@@ -452,7 +453,7 @@ class TaskProcessor:
         )
 
         constraint = Constraint.from_regex(rf'```{document.code_block_type}\n(\n|[^`].*?\n)+```\n\n')
-        params = GenerationParams(n=1, temperature=self.temperature, constraint=constraint)
+        params = GenerationParams(n=4, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('reintegrate_change', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.integration_generations.append(gen)
 

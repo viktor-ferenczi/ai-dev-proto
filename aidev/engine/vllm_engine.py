@@ -44,7 +44,7 @@ class VllmEngine(Engine):
 
         prompt = self.prompt_template.render(messages=messages)
 
-        if params.max_tokens >= 0:
+        if params.max_tokens > 0:
             max_tokens = params.max_tokens
         else:
             max_tokens = self.max_context - self.tokenizer.count_tokens(prompt) - 2
