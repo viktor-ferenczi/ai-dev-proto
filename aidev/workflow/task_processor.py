@@ -1,7 +1,7 @@
 import json
 import os
 import traceback
-from typing import Set
+from typing import Set, List
 
 from pydantic import BaseModel
 
@@ -325,7 +325,14 @@ class TaskProcessor:
             MARKER_NAME=MARKER_NAME,
         )
 
-        constraint = Constraint.from_regex(rf'((Path|New): `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n)+')
+
+        existing_files_pattern=''.join(
+            rf'(Path: `{source.document.path}`\n\n```{source.document.code_block_type}\n(\n|[^`].*?\n)*```\n\n)?'
+            for source in task.sources
+        )
+
+        new_files_pattern=rf'(New: `(.*?)`\n\n```([a-z]+)\n(\n|[^`].*?\n)*```\n\n){{0,5}}'
+        constraint = Constraint.from_regex(f'{existing_files_pattern}{new_files_pattern}')
         params = GenerationParams(n=4, temperature=self.temperature, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
@@ -362,7 +369,8 @@ class TaskProcessor:
         except ValueError as e:
             return f'Invalid code block(s) in completion: {e}'
 
-        paths_to_stage = []
+        paths_seen: Set[str] = set()
+        paths_to_stage: List[str] = []
 
         async with AsyncPool() as pool:
             for i, j in code_blocks:
@@ -392,6 +400,12 @@ class TaskProcessor:
                 if create and path in task.paths:
                     print(f'The implementation wants to create a file which already exists (ignored): {path}')
                     continue
+
+                if path in paths_seen:
+                    print(f'Ignoring repeated path: {path}')
+                    continue
+
+                paths_seen.add(path)
 
                 full_path = os.path.join(self.wc.project_dir, path)
 
@@ -431,6 +445,8 @@ class TaskProcessor:
         modified_code_block = f'```{document.code_block_type}\n{replace_tripple_backquote(modifications)}\n```'
         instruction = render_workflow_template(
             'reintegrate_change',
+            task=task,
+            source_path=document.path,
             original_code_block=document.code_block,
             modified_code_block=modified_code_block,
             code_block_type=document.code_block_type,
