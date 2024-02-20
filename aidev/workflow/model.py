@@ -1,7 +1,9 @@
 import asyncio
 import os
 from traceback import format_exc
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Dict
+from uuid import uuid4
+
 from pydantic import BaseModel
 
 from ..code_map.model import Graph
@@ -23,6 +25,12 @@ class GenerationState(SimpleEnum):
 class Generation(BaseModel):
     """Represents a single invocation of a Language Model (LLM), which may produce multiple completions (batch generation)"""
 
+    id: str
+    """Unique ID of this generation"""
+
+    label: str
+    """Label to identify the role of the generation in the thinking structure"""
+
     state: GenerationState
     """The state of the generation process"""
 
@@ -42,8 +50,10 @@ class Generation(BaseModel):
     """Error message in FAILED state"""
 
     @classmethod
-    def new(cls, system: str, instruction: str, params: GenerationParams) -> 'Generation':
+    def new(cls, label: str, system: str, instruction: str, params: GenerationParams) -> 'Generation':
         return cls(
+            id=str(uuid4()),
+            label=label,
             state=GenerationState.PENDING,
             system=system,
             instruction=instruction,
@@ -65,15 +75,16 @@ class Generation(BaseModel):
         return tokens_can_fit and constraint_is_supported
 
     async def run_on(self, engine: Engine):
-        print('Starting generation')
         try:
+            print(f'Starting generation: {self.label}')
             self.completions = await engine.generate(self.system, self.instruction, self.params)
         except Exception:
-            print('Failed generation')
             self.state = GenerationState.FAILED
             self.error = format_exc()
+            print(f'Failed generation: {self.label}')
+            print(self.error)
         else:
-            print('Finished generation')
+            print(f'Finished generation: {self.label}')
             self.state = GenerationState.COMPLETED
 
     async def wait(self):
@@ -88,19 +99,6 @@ class SourceState(SimpleEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIP = "SKIP"
-
-
-class Dependency(BaseModel):
-    """Represents the definition of a dependency pulled from the code map"""
-
-    symbol: str
-    """The name of a symbol in the source code for which the dependency is pulled"""
-
-    path: str
-    """The path of the source file from which the definition is pulled"""
-
-    definition: str
-    """The definition of the dependency, such as enum, class, struct, method, etc"""
 
 
 class Source(BaseModel):
@@ -213,17 +211,20 @@ class Task(BaseModel):
     relevant_symbols: Optional[list[str]] = None
     """List of the IDs of the relevant symbols required to work on the task"""
 
+    sources: Optional[list[Source]] = None
+    """Source files that need to be modified, extended during planning"""
+
     planning_generations: Optional[list[Generation]] = None
-    """Text generations used for planning the implementation"""
+    """Planning generations"""
 
     plan: Optional[str] = None
     """Step-by-step plan to implement the task"""
 
-    sources: Optional[list[Source]] = None
-    """Source files that need to be modified, extended during planning"""
-
     patch_generation: Optional[Generation] = None
     """Text generation to actually implement the change to one or more source code hunks at the same time"""
+
+    integration_generations: Optional[list[Generation]] = None
+    """Text generations to integrate code changes"""
 
     feedback_generation: Optional[Generation] = None
     """Text generation to evaluate the build or test results or errors"""
@@ -261,6 +262,9 @@ class Task(BaseModel):
         if self.patch_generation is not None:
             yield self.patch_generation
 
+        if self.integration_generations is not None:
+            yield from self.integration_generations
+
         if self.feedback_generation is not None:
             yield self.feedback_generation
 
@@ -280,7 +284,7 @@ class Solution(BaseModel):
     folder: str
     """Working copy folder"""
 
-    tasks: dict[str, Task]
+    tasks: Dict[str, Task]
     """All tasks by ID regardless of their state"""
 
     @classmethod

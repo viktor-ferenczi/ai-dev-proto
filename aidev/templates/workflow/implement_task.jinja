@@ -5,6 +5,9 @@
     Your job is to complete the TASK described by the TASK-DESCRIPTION by implementing changes to the ORIGINAL-SOURCE-CODE.
     The ORIGINAL-SOURCE-CODE is part of a larger project. You can see only the relevant parts of the code here.
 
+    The changes required have already been planned, you can find them in the IMPLEMENTATION-PLAN block. Always follow
+    the IMPLEMENTATION-PLAN with your code changes.
+
     Please ALWAYS honor ALL of these rules specific to your current job:
 
     - ALWAYS write clean, human-readable code.
@@ -14,22 +17,37 @@
     - UPDATE any existing comments related to the TASK to match the modified code.
     - Remove existing comments ONLY if they are invalidated by implementing the TASK.
     - NEVER use placeholders, ALWAYS write out the full code.
-    - Reproduce the code with the appropriate modifications from the `//START` marker to the `//FINISH` marker.
-    - PRESERVE code lines containing {{ MARKER_NAME }}, even if they don't seem to relate to the logic.
     - PRESERVE all code and comments not need to be changed to implement the TASK.
+    - NEVER delete any code or comment lines unrelated to your changes.
     - MAKE SURE to change the code CONSISTENTLY. If you make changes to an interface, class, struct,
-      method or variable signature, then MAKE SURE to adjust ALL of its uses consistently!
+    - ADD the necessary using statements at the top to import the necessary namespaces used by the modified code.
+    - MAKE SURE to adjust all uses of any method or variable which has its signature or type changed.
+    - MAKE SURE to add the using statements to import the necessary namespaces at the top of any newly created source files.
+    - MAKE SURE to add define the right namespace in any newly created C# source files.
+    - Do NOT repeat the same source file.
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
 
-    Your RESPONSE must be enclosed in an IMPLEMENTATION-PLAN block, followed by a MODIFIED-SOURCE-CODE block.
+    Your RESPONSE must contain consecutive code blocks, each of them preceeded with a "Path:" line in the same order
+    as the ORIGINAL-SOURCE-CODE. You must write any modified code in their corresponding code blocks. You may skip
+    code blocks corresponding to original source files you do not need to change to implement the code changes
+    required to implement the TASK.
 
-    The IMPLEMENTATION-PLAN block must include a concise list of code changes required to implement the task.
-    Make sure to write down all the steps before modifying any of the source code.
+    To delete a source file leave its corresponding code block empty.
 
-    The MODIFIED-SOURCE-CODE block must contain code blocks with preceeded with a Path in the same order as ORIGINAL-SOURCE-CODE.
-    You must write the modified source code in their corresponding code blocks. Leave the code block empty to delete the file.
-    You cannot introduce new source code files.
+    If you skip a source file it will remain unmodified.
+
+    You can modify or delete these existing files (paths):
+
+    {% for path in source_paths %}
+        - `{{ path }}`
+    {% endfor %}
+
+    To create a new source file just state its Path: and provide the code block with its contents.
+    Introduce new source files only if really needed. For new files use the same file naming convention
+    as the other source files of the .NET Core Web server project are using.
+
+    Write each modified or new file only once, then finish your response.
 
 </INSTRUCTIONS>
 
@@ -39,6 +57,12 @@
 
 </TASK-DESCRIPTION>
 
+<IMPLEMENTATION-PLAN>
+
+    {{ task.plan }}
+
+</IMPLEMENTATION-PLAN>
+
 <ORIGINAL-SOURCE-CODE>
 
     {% for source in task.sources %}
@@ -46,7 +70,7 @@
         {% set doc = source.document %}
         {% set hunk = source.relevant %}
         {% set path = doc.path %}
-        {% set code_block = hunk.code_block_start_finish %}
+        {% set code_block = hunk.code_block %}
         {% include 'code_block.jinja' with context %}
 
     {% endfor %}

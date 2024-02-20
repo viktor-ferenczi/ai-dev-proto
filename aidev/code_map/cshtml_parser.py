@@ -90,6 +90,13 @@ class CshtmlParser(TreeSitterParser):
                         value = decode_normalize(attribute_value.text)
                         controller = Symbol.new(path, Category.ACTION, block, value)
                         graph.add_symbol_and_relation_both_ways(attribute, ctx.relation, controller)
+                    elif name.lower() == 'asp-rule-':
+                        # <a asp-action="Profile" asp-controller="Account" asp-route-userId="@Model.Order.UserId">Profile</a>
+                        attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
+                        value = decode_normalize(attribute_value.text)
+                        if value.startswith('@Model.'):
+                            route = Symbol.new(path, Category.ROUTE, block, value.split('.', 1)[1])
+                            graph.add_symbol_and_relation_both_ways(attribute, ctx.relation, route)
                 continue
 
     def cross_reference(self, graph: Graph, path: str):
@@ -112,4 +119,12 @@ class CshtmlParser(TreeSitterParser):
             if symbol.category == Category.ACTION:
                 for other in graph.symbols.values():
                     if other.category == Category.FUNCTION and other.name == symbol.name:
+                        graph.add_relation_both_ways(symbol, Relation.USES, other)
+
+            # FIXME: Make is stricter by checking that the class is referred as a controller
+            if symbol.category == Category.ROUTE and '.' in symbol.name:
+                for other in graph.symbols.values():
+                    class_name, propery_name = symbol.name.split('.', 1)
+                    # FIXME: Find the class owning the member variable and verify that it has class_name
+                    if other.category == Category.VARIABLE and other.name == propery_name:
                         graph.add_relation_both_ways(symbol, Relation.USES, other)

@@ -59,6 +59,7 @@ class Category(SimpleEnum):
     ATTRIBUTE = 'ATTRIBUTE'
     CONTROLLER = 'CONTROLLER'
     ACTION = 'ACTION'
+    ROUTE = 'ROUTE'
 
     # Text
     PARAGRAPH = 'PARAGRAPH'

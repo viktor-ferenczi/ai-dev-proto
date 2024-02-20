@@ -1,7 +1,9 @@
 {% if generation %}
 
-    - State: {{ generation.state }}
-    - Completions: {{ generation.completions | length }}
+    - ID: `{{ generation.id }}`
+    - Label: `{{ generation.label }}`
+    - State: `{{ generation.state }}`
+    - Completions: `{{ generation.completions | length }}`
 
     {% if generation.error %}
         <details open>
@@ -19,13 +21,13 @@
 
     <details>
         <summary>System</summary>
-        {% set text = generation.system  %}
+        {% set text = generation.system %}
         {% include 'text.jinja' with context %}
     </details>
 
     <details>
         <summary>Instruction</summary>
-        {% set text = generation.instruction  %}
+        {% set text = generation.instruction %}
         {% include 'text.jinja' with context %}
     </details>
 

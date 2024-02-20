@@ -9,7 +9,7 @@ import shutil
 from contextlib import contextmanager
 from enum import Enum
 from logging import Logger, INFO, getLogger, StreamHandler, Formatter
-from typing import Iterable, List, Callable, Iterator, Awaitable, Any, Dict, Optional
+from typing import Iterable, List, Callable, Iterator, Awaitable, Any, Dict, Optional, Tuple
 
 from jinja2 import Environment, FileSystemLoader, Template, StrictUndefined
 
@@ -167,6 +167,21 @@ def extract_code_blocks(completion: str) -> List[str]:
         parts[i].split('\n', 1)[1]
         for i in range(1, len(parts), 2)
     ]
+
+
+def iter_code_blocks(lines: List[str]) -> Tuple[int, int]:
+    in_code = False
+    start = -1
+    for i, line in enumerate(lines):
+        if line.startswith('```'):
+            in_code = not in_code
+            if in_code:
+                start = i
+            else:
+                yield start, i
+
+    if in_code:
+        raise ValueError(f'Unclosed code block started at line #{1 + start}')
 
 
 def init_logger(loglevel=INFO) -> Logger:

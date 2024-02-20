@@ -1,5 +1,4 @@
 # API: https://github.com/openai/openai-python
-import os
 import time
 
 from openai import OpenAI, AsyncOpenAI
@@ -8,7 +7,7 @@ import unittest
 from aidev.common.config import C
 from aidev.common.async_helpers import AsyncPool
 from aidev.common.util import set_slow_callback_duration_threshold
-from aidev.tests.data import SYSTEM_CODING_ASSISTANT, INSTRUCTION_DEDUPLICATE_FILES, crop_text, BOOK, QUESTIONS
+from aidev.tests.data import INSTRUCTION_DEDUPLICATE_FILES, crop_text, BOOK, QUESTIONS
 from aidev.tokenizer import tokenizer
 
 
@@ -77,7 +76,7 @@ class SyncOpenAITest(unittest.TestCase):
         started = time.perf_counter()
         completion = self.client.chat.completions.create(
             messages=[
-                {"role": "system", "content": SYSTEM_CODING_ASSISTANT},
+                {"role": "system", "content": C.SYSTEM_CODING_ASSISTANT},
                 {"role": "user", "content": INSTRUCTION_DEDUPLICATE_FILES},
             ],
             model=C.OPENAI_MODEL,

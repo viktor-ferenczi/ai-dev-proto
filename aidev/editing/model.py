@@ -281,14 +281,6 @@ class Hunk(BaseModel):
         return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
-    def text_start_finish(self) -> str:
-        return join_lines(['//START'] + self.lines + ['//FINISH'])
-
-    @property
-    def code_block_start_finish(self) -> str:
-        return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text_start_finish)}\n```'
-
-    @property
     def code_block_lines(self) -> list[str]:
         lines = [f'```{self.document.doctype.code_block_type}']
         lines.extend(self.lines)
@@ -338,7 +330,7 @@ class Hunk(BaseModel):
                         break
                 elif line:
                     indent_example = line
-            yield copy_indent(indent_example, formatted_marker)
+            # yield copy_indent(indent_example, formatted_marker)
 
             # Skip the original text lines behind the marker
             position = marker.end

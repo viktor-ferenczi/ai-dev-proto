@@ -1,23 +1,28 @@
 import json
 import os
-import re
 import traceback
-from typing import Set
+from typing import Set, List
 
 from pydantic import BaseModel
 
-from .model import Solution, Task
-from .model import TaskState, Source, Generation, GenerationState, SourceState, Feedback
+from .model import Solution, Task, GenerationState, Generation
+from .model import TaskState, Source, Feedback
+from ..common.async_helpers import AsyncPool
+from ..common.config import C
 from .working_copy import WorkingCopy
 from ..code_map.model import Graph, Category, Symbol, Relation
 from ..code_map.parsers import detect_parser
-from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file
-from ..editing.model import Patch, Block, Hunk, MARKER_NAME
+from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines
+from ..editing.model import Patch, Block, Hunk, Document
 from ..engine.params import GenerationParams, Constraint
 
-SYSTEM_CODING_ASSISTANT = '''\
-You are a helpful coding assistant experienced in C#, .NET Core, HTML, JavaScript and Python.
-'''
+
+class ComparePlansResponse(BaseModel):
+    reasoning: str
+    better_implementation_plan: str
+
+
+COMPARE_PLANS_RESPONSE_SCHEMA = ComparePlansResponse.model_json_schema()
 
 
 class TaskProcessor:
@@ -27,12 +32,10 @@ class TaskProcessor:
         self.task: Task = task
         self.wc: WorkingCopy = working_copy
 
-        # FIXME: Make this varying
-        self.temperature: float = 0.2
-
     async def run(self):
         async with self.wc:
             self.wc.ensure_branch(self.task.branch)
+            self.wc.roll_back_changes('.')
             await self.drive_through_states()
 
     async def drive_through_states(self):
@@ -54,6 +57,13 @@ class TaskProcessor:
                     return
 
                 await self.find_relevant_sources()
+                if task.state == TaskState.FAILED:
+                    return
+
+                self.dump_task()
+
+                if task.plan is None:
+                    await self.plan()
                 if task.state == TaskState.FAILED:
                     return
 
@@ -164,8 +174,8 @@ class TaskProcessor:
             schema=schema,
         )
         constraint = Constraint.from_json_schema(schema)
-        params = GenerationParams(max_tokens=1000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        params = GenerationParams(max_tokens=1000, temperature=0.2, constraint=constraint)
+        gen = Generation.new('find_relevant_symbols', C.SYSTEM_CODING_ASSISTANT, instruction, params)
         task.relevant_symbols_generation = gen
         await gen.wait()
 
@@ -249,6 +259,58 @@ class TaskProcessor:
 
         task.state = TaskState.CODING
 
+    async def plan(self):
+        task = self.task
+        task.planning_generations = []
+
+        instruction = render_workflow_template(
+            'plan',
+            task=task,
+        )
+        params = GenerationParams(n=8, beam_search=True, max_tokens=1000, temperature=0.7)
+        plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        task.planning_generations.append(plan_gen)
+        self.dump_task()
+        await plan_gen.wait()
+        self.dump_task()
+        if plan_gen.state != GenerationState.COMPLETED:
+            task.state = TaskState.FAILED
+            task.error = 'Planning generation failed'
+            return
+
+        better_indices = []
+        completion_indices = list(range(params.n))
+        while len(completion_indices) > 1:
+            for i, j in zip(completion_indices[::2], completion_indices[1::2]):
+                instruction = render_workflow_template(
+                    'compare_plans',
+                    task=task,
+                    schema=COMPARE_PLANS_RESPONSE_SCHEMA,
+                    implementation_plan_alpha=plan_gen.completions[i],
+                    implementation_plan_beta=plan_gen.completions[j],
+                )
+                constraint = Constraint.from_json_schema(COMPARE_PLANS_RESPONSE_SCHEMA)
+                params = GenerationParams(n=11, max_tokens=1000, temperature=0.5, constraint=constraint)
+                compare_gen = Generation.new('compare_plans', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+                task.planning_generations.append(compare_gen)
+                self.dump_task()
+                await compare_gen.wait()
+                self.dump_task()
+                if compare_gen.state != GenerationState.COMPLETED:
+                    task.state = TaskState.FAILED
+                    task.error = f'Plan comparison generation failed: {compare_gen.error}'
+                    return
+
+                vote = sum(json.loads(response)['better_implementation_plan'] == 'ALPHA' for response in compare_gen.completions)
+                better_indices.append(i if vote >= params.n // 2 else j)
+
+            completion_indices = better_indices
+            better_indices = []
+
+        assert len(completion_indices) == 1
+        task.plan = plan_gen.completions[completion_indices[0]]
+        task.state = TaskState.CODING
+
     async def code_task(self):
         task = self.task
 
@@ -257,64 +319,147 @@ class TaskProcessor:
             task.error = f'No source files to change'
             return
 
+        source_paths = {source.document.path for source in task.sources}
+
         instruction = render_workflow_template(
             'implement_task',
             task=task,
-            MARKER_NAME=MARKER_NAME,
+            source_paths=source_paths,
         )
 
-        pattern = ''.join(
-            fr'Path: `{re.escape(source.document.path)}`\n\n+```{source.document.code_block_type}\n(\n|[^`].*?\n)*```\n\n+'
-            for source in task.sources
-        )
-        constraint = Constraint.from_regex(rf'<IMPLEMENTATION-PLAN>\n\n.*?\n\n</IMPLEMENTATION-PLAN>\n\n<MODIFIED-SOURCE-CODE>\n\n+{pattern}</MODIFIED-SOURCE-CODE>\n')
-        params = GenerationParams(n=8, beam_search=True, max_tokens=6000, temperature=self.temperature, constraint=constraint)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+'
+        constraint = Constraint.from_regex(pattern)
+        params = GenerationParams(n=8, beam_search=True, temperature=0.2, constraint=constraint)
+        gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.patch_generation = gen
         self.dump_task()
         await gen.wait()
+        self.dump_task()
 
         if gen.state == GenerationState.FAILED:
             task.state = TaskState.FAILED
             task.error = f'Failed to implement the task'
             return
 
-        completion = gen.completions[0]
+        task.integration_generations = []
 
-        i = completion.find('<MODIFIED-SOURCE-CODE>')
-        j = completion.rfind('</MODIFIED-SOURCE-CODE>')
-        assert 0 <= i < j, f'Missing or wrong modified source block: i={i}, j={j}'
-        completion = completion[i + len('<MODIFIED-SOURCE-CODE>'):j].strip()
-        completion = completion.replace('<MODIFIED-SOURCE-CODE>', '')
-        completion = completion.replace('</MODIFIED-SOURCE-CODE>', '')
-
-        for source in task.sources:
-            path = source.document.path
-            assert f'Path: `{path}`' in completion, f'Missing path: {path}'
-
-        for source, code_block in zip(task.sources, extract_code_blocks(completion)):
-            replacement_lines = code_block.split('\n')
-            assert replacement_lines[0] == '//START'
-            assert replacement_lines[-1] == '//FINISH'
-            replacement_lines = replacement_lines[1:-1]
-            source.relevant.replacement = replacement_lines
-            source.patch = Patch.from_hunks(source.relevant.document, [source.relevant])
-            source.implementation = source.patch.apply()
-            source.state = SourceState.COMPLETED
-
-        for source in task.sources:
-            if source.state == SourceState.PENDING:
-                source.state = SourceState.SKIP
-
-        assert all(source.state in (SourceState.COMPLETED, SourceState.SKIP) for source in task.sources), 'Invalid source states'
-
-        if not any(source.state == SourceState.COMPLETED for source in task.sources):
-            task.state = TaskState.FAILED
-            task.error = f'No changes made to any of the source files'
-            return
+        for i, completion in enumerate(gen.completions):
+            print(f'Trying to apply change from completion {i}')
+            error = await self.apply_code_changes(completion, source_paths)
+            if not task.is_wip:
+                return
+            if not error:
+                break
+            self.wc.roll_back_changes('.')
 
         task.state = TaskState.TESTING
+
+    async def apply_code_changes(self, completion: str, source_paths: Set[str]) -> str:
+        task = self.task
+
+        completion_lines = completion.split('\n')
+
+        try:
+            code_blocks = iter_code_blocks(completion_lines)
+        except ValueError as e:
+            return f'Invalid code block(s) in completion: {e}'
+
+        paths_seen: Set[str] = set()
+        paths_to_stage: List[str] = []
+
+        async with AsyncPool() as pool:
+            for i, j in code_blocks:
+                print(f'Completion code block {i}:{j}')
+
+                path = ''
+                for k in range(i - 1, -1, -1):
+                    line = completion_lines[k].strip()
+                    if not line:
+                        continue
+                    if line.startswith('Path: `') and line.endswith('`'):
+                        path = line.split(': `', 1)[1][:-1]
+                    break
+
+                if not path:
+                    return f'Cannot find path line before completion code block (ignored): {i}:{j}'
+
+                if path in paths_seen:
+                    print(f'Ignoring repeated path: {path}')
+                    continue
+
+                paths_seen.add(path)
+
+                full_path = os.path.join(self.wc.project_dir, path)
+                dir_path = os.path.dirname(full_path)
+                exists = os.path.exists(full_path)
+
+                code_lines = completion_lines[i + 1:j]
+                code = join_lines(code_lines)
+
+                os.makedirs(dir_path, exist_ok=True)
+
+                if code.strip():
+                    if exists:
+                        print(f'Modify: {path}')
+                        document = Document.from_file(self.wc.project_dir, path)
+                        if len(pool) >= 16:
+                            await pool.wait()
+                        pool.run(self.reintegrate_code_change(document, code))
+                    else:
+                        print(f'Create: {path}')
+                        write_text_file(full_path, code)
+                    paths_to_stage.append(path)
+                elif exists:
+                    print(f'Delete: {path}')
+                    os.remove(full_path)
+                    paths_to_stage.append(path)
+
+                if not task.is_wip:
+                    return task.error
+
+        for path in paths_to_stage:
+            self.wc.stage_change(path)
+
+        return ''
+
+    async def reintegrate_code_change(self, document: Document, modifications: str):
+        task = self.task
+
+        if not modifications.strip():
+            return
+
+        modified_code_block = f'```{document.code_block_type}\n{replace_tripple_backquote(modifications)}\n```'
+        instruction = render_workflow_template(
+            'reintegrate_change',
+            task=task,
+            source_path=document.path,
+            original_code_block=document.code_block,
+            modified_code_block=modified_code_block,
+            code_block_type=document.code_block_type,
+        )
+
+        constraint = Constraint.from_regex(rf'```{document.code_block_type}\n(\n|[^`].*?\n)+```\n\n')
+        params = GenerationParams(n=4, temperature=0.2, constraint=constraint)
+        gen = Generation.new('reintegrate_change', C.SYSTEM_CODING_ASSISTANT, instruction, params)
+        task.integration_generations.append(gen)
+
+        self.dump_task()
+        await gen.wait()
+
+        if gen.state == GenerationState.FAILED:
+            task.state = TaskState.FAILED
+            task.error = f'Failed to reintegrate change to file: {document.path}'
+            return
+
+        for modified_code in extract_code_blocks(gen.completions[0]):
+            break
+        else:
+            task.state = TaskState.FAILED
+            task.error = f'No code blocks produced by the reintegrate change generation for file: {document.path}'
+            return
+
+        write_text_file(os.path.join(self.wc.project_dir, document.path), modified_code)
 
     async def build_and_test_task(self):
         task = self.task
@@ -322,19 +467,11 @@ class TaskProcessor:
 
         assert isinstance(wc, WorkingCopy)
 
-        for source in task.sources:
-            if source.state == SourceState.COMPLETED:
-                source.implementation.write(wc.project_dir)
-
         wc.format_code()
 
-        for source in task.sources:
-            if source.state == SourceState.COMPLETED:
-                source.implementation.update(wc.project_dir)
-
-        if not any(source.document.lines != source.implementation.lines for source in task.sources):
+        if not wc.has_changes():
             task.state = TaskState.FAILED
-            task.error = f'No changes made as part of the implementation'
+            task.error = f'No changes made during the implementation'
             return
 
         error = wc.build()
@@ -351,10 +488,6 @@ class TaskProcessor:
             task.error = f'Failed to test solutions:\n\n{error}'
             return
 
-        for source in task.sources:
-            if source.state == SourceState.COMPLETED:
-                wc.stage_change(source.implementation.path)
-
         task.state = TaskState.REVIEW
         self.dump_task()
 
@@ -369,8 +502,8 @@ class TaskProcessor:
             error=replace_tripple_backquote(error),
         )
 
-        params = GenerationParams(max_tokens=300, temperature=self.temperature)
-        gen = Generation.new(SYSTEM_CODING_ASSISTANT, instruction, params)
+        params = GenerationParams(max_tokens=500, temperature=0.2)
+        gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.feedback_generation = gen
         await gen.wait()

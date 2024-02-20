@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from pydantic import BaseModel
 
@@ -20,7 +20,7 @@ class Constraint(BaseModel):
         return cls(type=ConstraintType.REGEX, value=pattern)
 
     @classmethod
-    def from_json_schema(cls, json_schema: dict[str, Any]):
+    def from_json_schema(cls, json_schema: Dict[str, Any]):
         return cls(type=ConstraintType.JSON_SCHEMA, value=json_schema)
 
     @classmethod
@@ -31,6 +31,6 @@ class Constraint(BaseModel):
 class GenerationParams(BaseModel):
     n: int = 1
     use_beam_search: bool = False
-    max_tokens: int = 256
+    max_tokens: int = 0  # Zero means up to max context of the model
     temperature: float = 0.0  # Keep the default temperature at zero, that's required when beam search is turned on
     constraint: Optional[Constraint] = None

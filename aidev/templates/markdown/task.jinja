@@ -36,6 +36,19 @@
 {% endif %}
 
 
+{% if task.relevant_symbols_generation %}
+
+    ---
+
+    <details>
+        <summary>Relevant symbols generation</summary>
+        {% set generation = task.relevant_symbols_generation %}
+        {% include 'generation.jinja' with context %}
+    </details>
+
+{% endif %}
+
+
 {% if task.planning_generations %}
 
     ---
@@ -43,27 +56,11 @@
     <details>
         <summary>Planning generations</summary>
         {% for generation in task.planning_generations %}
-
-            ---
-
             <details>
-                <summary>Generation {{ loop.index }}</summary>
+                <summary>{{ generation.label }}</summary>
                 {% include 'generation.jinja' with context %}
             </details>
         {% endfor %}
-    </details>
-
-{% endif %}
-
-
-{% if task.relevant_symbols_generation %}
-
-    ---
-
-    <details>
-        <summary>Relvant symbols generation</summary>
-        {% set generation = task.relevant_symbols_generation %}
-        {% include 'generation.jinja' with context %}
     </details>
 
 {% endif %}
@@ -93,6 +90,23 @@
         <summary>Patch generation</summary>
         {% set generation = task.patch_generation %}
         {% include 'generation.jinja' with context %}
+    </details>
+
+{% endif %}
+
+
+{% if task.integration_generations %}
+
+    ---
+
+    <details>
+        <summary>Reintegrate generations</summary>
+        {% for generation in task.integration_generations %}
+            <details>
+                <summary>{{ generation.label }}</summary>
+                {% include 'generation.jinja' with context %}
+            </details>
+        {% endfor %}
     </details>
 
 {% endif %}

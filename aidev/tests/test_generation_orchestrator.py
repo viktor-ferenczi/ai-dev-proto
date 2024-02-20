@@ -5,7 +5,7 @@ import unittest
 from aidev.engine.params import GenerationParams
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
-from aidev.workflow.model import Solution, Task, Generation, TaskState, GenerationState, Source
+from aidev.workflow.model import Solution, Task, TaskState, Source, GenerationState, Generation
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
@@ -18,14 +18,10 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         generations: list[Generation] = []
 
         def create_generation():
-            generation = Generation.new(
-                'You are a helpful C# coding assistant.',
-                '''
+            generation = Generation.new('test', 'You are a helpful C# coding assistant.', '''
                     Write a C# 10 console program to print the integers from 1 to 10, each one on a separate line.
                     Write only the code and nothing else. Do not explain, do not add source code comments.
-                ''',
-                GenerationParams(max_tokens=150, temperature=0.2)
-            )
+                ''', GenerationParams(max_tokens=150, temperature=0.2))
             generations.append(generation)
             return generation
 
@@ -41,13 +37,12 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             description='description',
             branch='branch',
             state=TaskState.PLANNING,
-            planning_generations=[create_generation()],
             feedback_generation=create_generation(),
             sources=[create_source(), create_source()],
         )
         solution.tasks[task.id] = task
 
-        self.assertEqual(6, len(generations))
+        self.assertEqual(5, len(generations))
 
         orchestrator = GenerationOrchestrator(solution)
 
