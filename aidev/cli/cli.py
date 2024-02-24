@@ -127,6 +127,10 @@ async def command_fix(project: WorkingCopy, branch: str, source: str):
     print(f'Loading issues from SonarQube')
     for issue in sonar.get_issues():
 
+        # FIXME: !!! Don't merge this !!!
+        if issue.key != 'AY12XCHttlu1W1OPFn1y':
+            continue
+
         if issue.textRange is None:
             description = issue.message
         else:
