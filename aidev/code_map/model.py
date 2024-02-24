@@ -1,5 +1,6 @@
+from collections import defaultdict
 from hashlib import sha1
-from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set, Any
+from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set, Any, List
 
 from pydantic import BaseModel
 
@@ -11,96 +12,80 @@ Identifier: TypeAlias = str
 
 
 class Category(SimpleEnum):
-    # Programming language specific, down to the statement level.
-    # Relations express the variable level references from assignments and expressions.
-
+    """High level category of a named symbol in source code or document section"""
     SOURCE = 'SOURCE'
-    """Entire source file, global level"""
+    """One specific source file (top level, always present)"""
+
+    BLOCK = 'BLOCK'
+    """Named, but untyped document block (section, CSS style, HTML element)"""
+
+    IMPORT = 'IMPORT'
+    """Importing or including a specific source file"""
 
     NAMESPACE = 'NAMESPACE'
-    """Namespace declaration"""
+    """Namespace"""
 
     USING = 'USING'
-    """Using a namespace (import)"""
+    """Using a namespace"""
 
-    TYPE_ALIAS = 'TYPE_ALIAS'
-    """Type alias"""
-
-    INTERFACE = 'INTERFACE'
-    """Interface declaration (global, namespace or inner)"""
-
-    CLASS = 'CLASS'
-    """Class declaration (global, namespace or inner)"""
-
-    STRUCT = 'STRUCT'
-    """Struct declaration (global, namespace or inner)"""
-
-    RECORD = 'RECORD'
-    """Record declaration (global, namespace or inner)"""
+    TYPE = 'TYPE'
+    """Type, type alias, interface, trait, class, struct, record"""
 
     FUNCTION = 'FUNCTION'
-    """Function (global, inner) or method (interface, class, struct) declaration"""
-
-    # Do we need it?
-    LAMBDA = 'LAMBDA'
-    """Function in an expression without a name"""
+    """Function (global, inner) or method (interface, trait, class, struct) declaration, including propery get/set"""
 
     VARIABLE = 'VARIABLE'
-    """Variable (global, member, class, local)"""
-
-    STATEMENT = 'STATEMENT'
-    """Statement (global or inside a function)"""
-
-    IDENTIFIER = 'IDENTIFIER'
-    """Identifier inside a statement referencing some other symbol (interface, class, struct, record, variable)"""
-
-    # CSHTML
-    ELEMENT = 'ELEMENT'
-    ATTRIBUTE = 'ATTRIBUTE'
-    CONTROLLER = 'CONTROLLER'
-    ACTION = 'ACTION'
-    ROUTE = 'ROUTE'
-
-    # Text
-    PARAGRAPH = 'PARAGRAPH'
-    MENTION = 'MENTION'
-
-    # Markdown
-    # TODO
+    """Variable (global, class, struct, member, local)"""
 
 
-class Relation(SimpleEnum):
-    CHILD = 'CHILD'
-    PARENT = 'PARENT'
-    USES = 'USES'
-    USED_BY = 'USED_BY'
+NAMESPACE_AWARE_CATEGORIES = (
+    Category.USING,
+    Category.TYPE,
+    Category.FUNCTION,
+    Category.VARIABLE,
+)
 
 
-OPPOSITE_RELATIONS = {
-    Relation.CHILD: Relation.PARENT,
-    Relation.PARENT: Relation.CHILD,
-    Relation.USES: Relation.USED_BY,
-    Relation.USED_BY: Relation.USES,
-}
+class Reference(BaseModel):
+    """ Reference collected while parsing the source code
+    """
+    name: str
+    category: Category
+
+    @classmethod
+    def new(cls, name: str, category: Category):
+        return cls(name=name, category=category)
+
+    def __hash__(self) -> int:
+        return hash(self.name) ^ hash(self.category)
 
 
 class Symbol(BaseModel):
     """Code map graph node, represents a programming language or document format specific construct
     """
-    id: Identifier
-    """Globally unique identifier in the solution"""
-
-    path: str
-    """Solution relative path of the source file"""
+    parent: Optional[Identifier]
+    """ID of the parent, source files don't have a parent"""
 
     category: Category
     """Category of the symbol"""
 
-    block: Optional[Block] = None
+    name: str
+    """Name of the symbol without the namespace, solution relative path for source"""
+
+    block: Block
     """Block of lines which contain the entire definition"""
 
-    name: Optional[str] = None
-    """Name of the symbol without the namespace, the namespace is connected via a relation"""
+    children: Set[Identifier]
+    """IDs of the symbols directly under this one"""
+
+    dependencies: Set[Identifier]
+    """IDs of the symbols this symbol uses, inverse of dependents"""
+
+    dependents: Set[Identifier]
+    """IDs of the symbols using this one, inverse of dependencies"""
+
+    references: Optional[Set[Reference]] = None
+    """Reference collected while parsing the source code, they are turned into proper dependencies by cross-referencing"""
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -111,19 +96,49 @@ class Symbol(BaseModel):
     def __ne__(self, other: Any) -> bool:
         return isinstance(other, Symbol) and self.id != other.id
 
-    @classmethod
-    def new(cls, path: str, category: Category, block: Optional[Block], name: Optional[str] = None) -> 'Symbol':
-        block_signature = '' if block is None else f'#{block.begin}:{block.end}'
-        id = f'{path}{block_signature}|{category}|{name or ""}'
+    @property
+    def id(self) -> str:
+        id = f'{self.category}|{self.name}|{self.block.begin}:{self.block.end}'
         if C.HASH_SYMBOL_IDS:
             id = sha1(id.encode('utf-8')).hexdigest()
-        return cls(
-            id=id,
-            path=path,
+        return id
+
+    @classmethod
+    def new(cls, parent: Optional['Symbol'], category: Category, name: str, block: Block) -> 'Symbol':
+        if parent is None:
+            parent_id = None
+        else:
+            assert isinstance(parent, Symbol)
+            parent_id = parent.id
+
+        symbol = cls(
+            parent=parent_id,
             category=category,
-            block=block,
             name=name,
+            block=block,
+            children=set(),
+            dependencies=set(),
+            dependents=set(),
+            references=set(),
         )
+
+        if parent is not None:
+            parent.children.add(symbol.id)
+
+        return symbol
+
+    def uses(self, symbol: 'Symbol'):
+        assert isinstance(symbol, Symbol)
+        self.dependencies.add(symbol.id)
+        symbol.dependents.add(self.id)
+
+    def used_by(self, symbol: 'Symbol'):
+        assert isinstance(symbol, Symbol)
+        self.dependents.add(symbol.id)
+        symbol.dependencies.add(self.id)
+
+
+NamespaceSymbolMap: TypeAlias = Dict[str, Dict[str, List[Symbol]]]
 
 
 class Graph(BaseModel):
@@ -135,73 +150,188 @@ class Graph(BaseModel):
 
     """
     symbols: Dict[Identifier, Symbol]
-    relations: Dict[Identifier, Dict[Identifier, Relation]]
 
     @classmethod
     def new(cls) -> 'Graph':
-        return cls(symbols={}, relations={})
+        return cls(symbols={})
 
-    def __ior__(self, other: 'Graph'):
+    def update(self, other: 'Graph'):
         assert isinstance(other, Graph)
+
+        conflicts: Set[Identifier] = set(self.symbols) & set(other.symbols)
+        if conflicts:
+            raise ValueError(f'Conflicting symbols: {sorted(conflicts)!r}')
 
         self.symbols.update(other.symbols)
 
-        for id, other_relations in other.relations.items():
-            this_relations = self.relations.get(id)
-            if this_relations is None:
-                self.relations[id] = this_relations = {}
-            this_relations.update(other_relations)
-
-    def add_symbol(self, symbol: Symbol):
+    def new_source(self, path: str, file_line_count: int):
+        symbol: Symbol = Symbol.new(None, Category.SOURCE, path, Block.from_range(0, file_line_count))
         self.symbols[symbol.id] = symbol
+        return symbol
 
-    def add_relation(self, existing: Symbol, relation: Relation, new: Symbol):
-        assert existing.id in self.symbols, 'Symbol A is not registered'
-        assert new.id in self.symbols, 'Symbol B is not registered'
-        relations = self.relations.get(existing.id)
-        if relations is None:
-            self.relations[existing.id] = relations = {}
-        relations[new.id] = relation
+    def new_symbol(self, parent: Symbol, category: Category, name: str, block: Block) -> Symbol:
+        symbol: Symbol = Symbol.new(parent, category, name, block)
+        self.symbols[symbol.id] = symbol
+        return symbol
 
-    def add_relation_both_ways(self, existing: Symbol, relation: Relation, new: Symbol):
-        opposite = OPPOSITE_RELATIONS[relation]
-        self.add_relation(existing, relation, new)
-        self.add_relation(new, opposite, existing)
+    def __getitem__(self, id: str) -> Symbol:
+        return self.symbols[id]
 
-    def add_symbol_and_relation(self, existing: Symbol, relation: Relation, new: Symbol):
-        self.add_symbol(new)
-        self.add_relation(existing, relation, new)
+    def get(self, id: str, default: Optional[Symbol] = None):
+        return self.symbols.get(id, default)
 
-    def add_symbol_and_relation_both_ways(self, existing: Symbol, relation: Relation, new: Symbol):
-        self.add_symbol(new)
-        self.add_relation_both_ways(existing, relation, new)
+    def list(self, ids: Iterable[str]) -> List[Symbol]:
+        return [self.symbols[id] for id in ids]
 
-    def get_parent(self, child: Symbol) -> Optional[Symbol]:
-        for relation, parent in self.iter_related(child):
-            if relation == Relation.PARENT:
-                return parent
+    def iter(self, ids: Iterable[str]) -> Iterable[Symbol]:
+        for id in ids:
+            yield self.symbols[id]
+
+    def get_parent(self, symbol: Symbol) -> Optional[Symbol]:
+        if symbol.parent is None:
+            return None
+        return self.symbols[symbol.parent]
+
+    def find_parent(self, symbol: Optional[Symbol], category: Category) -> Optional[Symbol]:
+        while symbol is not None:
+            if symbol.category == category:
+                return symbol
+            symbol = self.symbols[symbol.parent]
+
         return None
 
-    def iter_related(self, symbol: Symbol) -> Iterable[Tuple[Relation, Symbol]]:
-        relations: Dict[Identifier, Relation] = self.relations.get(symbol.id)
-        if relations is not None:
-            for id, relation in relations.items():
-                yield relation, self.symbols[id]
+    def iter_children_of_category(self, symbol: Symbol, category: Category) -> Iterable[Symbol]:
+        for child in self.iter(id for id in symbol.children):
+            if child.category == category:
+                yield child
 
-    def walk_related(self, first_symbol: Symbol, follow_relation: Relation) -> Iterable[Symbol]:
-        visited: Set[Identifier] = set()
+    def iter_symbols_with_category(self, category: Category) -> Iterable[Symbol]:
+        for symbol in self.symbols.values():
+            if symbol.category == category:
+                yield symbol
 
-        stack = [first_symbol]
-        while stack:
-            symbol = stack.pop()
-            visited.add(symbol.id)
+    def iter_namespaces_by_name(self, names: Set[str]) -> Iterable[Symbol]:
+        for symbol in self.symbols.values():
+            if symbol.category == Category.NAMESPACE and symbol.name in names:
+                yield symbol
 
-            relations: Dict[Identifier, Relation] = self.relations.get(symbol.id)
-            if relations is None:
+    def iter_parents(self, symbol: Symbol) -> Iterable[Symbol]:
+        while 1:
+            if symbol.parent is None:
+                break
+            yield symbol
+            symbol = self.symbols[symbol.parent]
+
+    def walk_children(self, parent: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+        if visited is None:
+            visited = {parent.id}
+
+        depth += 1
+
+        for id in parent.children:
+            if id in visited:
                 continue
+            child = self.symbols[id]
+            yield child, depth
+            if child.children:
+                yield from self.walk_children(child, depth, visited)
 
-            for id, relation in relations.items():
-                if relation == follow_relation and id not in visited:
-                    symbol = self.symbols[id]
-                    yield symbol
-                    stack.append(symbol)
+    def walk_dependencies(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+        if visited is None:
+            visited = {symbol.id}
+
+        depth += 1
+
+        for id in symbol.dependencies:
+            if id in visited:
+                continue
+            dependency = self.symbols[id]
+            yield dependency, depth
+            if dependency.dependencies:
+                yield from self.walk_dependencies(dependency, depth, visited)
+
+    def walk_dependants(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+        if visited is None:
+            visited = {symbol.id}
+
+        depth += 1
+
+        for id in symbol.dependents:
+            if id in visited:
+                continue
+            dependency = self.symbols[id]
+            yield dependency, depth
+            if dependency.dependents:
+                yield from self.walk_dependants(dependency, depth, visited)
+
+    def cross_reference(self):
+        self.__remove_external_references()
+        namespace_symbol_map: NamespaceSymbolMap = self.__map_symbols_to_namespaces()
+        self.__reference_symbols(namespace_symbol_map)
+        self.__cleanup(namespace_symbol_map)
+
+    def __remove_external_references(self):
+        """ Eliminates references to names with no symbol defined in the source code, all of those are external code
+        """
+        names_defined: Set[str] = {symbol.name for symbol in self.symbols.values()}
+        for symbol in self.symbols.values():
+            symbol.references = {reference for reference in symbol.references if reference.name in names_defined}
+
+    def __map_symbols_to_namespaces(self) -> NamespaceSymbolMap:
+        namespace_symbol_map: NamespaceSymbolMap = {}
+        for namespace in self.iter_symbols_with_category(Category.NAMESPACE):
+            namespace_symbol_map[namespace.name] = symbol_map = defaultdict(list)
+            symbol_map[namespace.name].append(namespace)
+
+        for namespace_name, symbol_map in namespace_symbol_map.items():
+            for namespace in symbol_map[namespace_name]:
+                if namespace.category != Category.NAMESPACE:
+                    continue
+
+                for symbol, depth in self.walk_children(namespace):
+                    if symbol.category in NAMESPACE_AWARE_CATEGORIES:
+                        symbol_map[symbol.name].append(symbol)
+
+        return namespace_symbol_map
+
+    # FIXME: It is too wide, more like a search by name disregarding the data type and scoping rules
+    # FIXME: It could be further optimized
+    def __reference_symbols(self, namespace_symbol_map: NamespaceSymbolMap):
+        for namespace_name, symbol_map in namespace_symbol_map.items():
+
+            for namespace in symbol_map[namespace_name]:
+                if namespace.category != Category.NAMESPACE:
+                    continue
+
+                accessible = {namespace_name}
+                source = self.find_parent(namespace, Category.SOURCE)
+                for using in self.iter_children_of_category(source, Category.USING):
+                    if using.name in namespace_symbol_map:
+                        accessible.add(using.name)
+
+                for other_namespace_name in accessible:
+                    symbol_map = namespace_symbol_map.get(other_namespace_name)
+                    if symbol_map is None:
+                        continue
+
+                    for symbol, depth in self.walk_children(namespace):
+                        for reference in symbol.references:
+                            for other in symbol_map.get(reference.name, ()):
+                                if other.category == reference.category:
+                                    symbol.uses(other)
+
+    def __cleanup(self, namespace_symbol_map: NamespaceSymbolMap):
+
+        delete: Set[Identifier] = set()
+
+        for symbol in self.symbols.values():
+            del symbol.references
+
+            if symbol.category == Category.USING and symbol.name not in namespace_symbol_map:
+                delete.add(symbol.id)
+
+        for id in delete:
+            symbol = self.symbols[id]
+            parent = self.get_parent(symbol)
+            parent.children.discard(symbol.id)
+            del self.symbols[id]

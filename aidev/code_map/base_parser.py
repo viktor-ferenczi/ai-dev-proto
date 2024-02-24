@@ -22,6 +22,3 @@ class BaseParser:
 
     def parse(self, graph: Graph, path: str, content: bytes):
         raise NotImplementedError()
-
-    def cross_reference(self, graph: Graph, path: str):
-        raise NotImplementedError()

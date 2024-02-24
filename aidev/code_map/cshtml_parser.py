@@ -1,23 +1,21 @@
-import os
 from pprint import pformat
 
 from pydantic import BaseModel
 from tree_sitter import Tree, TreeCursor
 
 from .tree_sitter_util import walk_nodes, find_first_node
-from .model import Graph, Symbol, Category, Relation, Block
+from .model import Graph, Symbol, Category, Block, Reference
 from .tree_sitter_parser import TreeSitterParser
 from ..common.util import decode_normalize
 
 
 class Context(BaseModel):
     parent: Symbol
-    relation: Relation
     depth: int
 
     @classmethod
-    def new(cls, parent: Symbol, relation: Relation, depth: int) -> 'Context':
-        return cls(parent=parent, relation=relation, depth=depth)
+    def new(cls, parent: Symbol, depth: int) -> 'Context':
+        return cls(parent=parent, depth=depth)
 
 
 class CshtmlParser(TreeSitterParser):
@@ -27,12 +25,9 @@ class CshtmlParser(TreeSitterParser):
     tree_sitter_language_name = 'html'
 
     def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
-        source_basename = os.path.basename(path)
-        source_name = os.path.splitext(source_basename)[0]
-        source = Symbol.new(path, Category.SOURCE, Block.from_range(0, file_line_count), source_name)
-        graph.add_symbol(source)
+        source = graph.new_source(path, file_line_count)
 
-        ctx: Context = Context.new(source, Relation.PARENT, -1)
+        ctx: Context = Context.new(source, -1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
         stack: list[Context] = []
@@ -59,8 +54,7 @@ class CshtmlParser(TreeSitterParser):
                 text = decode_normalize(node.text)
                 if text.startswith('@model '):
                     name = text.split(' ', 1)[1].strip()
-                    symbol = Symbol.new(path, Category.USING, block, name)
-                    graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
+                    symbol = graph.new_symbol(ctx.parent, Category.USING, name, block)
                     continue
 
             start_tag = find_first_node(node, 'element', 'start_tag')
@@ -68,63 +62,46 @@ class CshtmlParser(TreeSitterParser):
                 tag_name = find_first_node(start_tag, 'start_tag', 'tag_name')
                 assert tag_name is not None
                 name = decode_normalize(tag_name.text)
-                symbol = Symbol.new(path, Category.ELEMENT, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
+                symbol = graph.new_symbol(ctx.parent, Category.BLOCK, name, block)
+                push(Context.new(symbol, depth))
                 continue
+
+            # Attributes of:
+            # @model Shop.Web.Models.Food.FoodIndexModel
+            # <a asp-controller="Category" asp-action="Topic" asp-route-id="@Model.CategoryId" class="btn btn-back">Back to @Model.CategoryName section</a>
+            # <a asp-action="Profile" asp-controller="Account" asp-route-userId="@order.UserId">@order.UserFullName</a>
 
             attribute_name = find_first_node(node, 'attribute', 'attribute_name')
-            if attribute_name is not None:
-                qval = find_first_node(node, 'attribute', 'quoted_attribute_value')
-                if qval is not None:
-                    name = decode_normalize(attribute_name.text)
-                    attribute = Symbol.new(path, Category.ATTRIBUTE, block, name)
-                    graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, attribute)
-                    if name.lower() == 'asp-controller':
-                        attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
-                        value = decode_normalize(attribute_value.text)
-                        controller = Symbol.new(path, Category.CONTROLLER, block, value)
-                        graph.add_symbol_and_relation_both_ways(attribute, ctx.relation, controller)
-                    elif name.lower() == 'asp-action':
-                        attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
-                        value = decode_normalize(attribute_value.text)
-                        controller = Symbol.new(path, Category.ACTION, block, value)
-                        graph.add_symbol_and_relation_both_ways(attribute, ctx.relation, controller)
-                    elif name.lower() == 'asp-rule-':
-                        # <a asp-action="Profile" asp-controller="Account" asp-route-userId="@Model.Order.UserId">Profile</a>
-                        attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
-                        value = decode_normalize(attribute_value.text)
-                        if value.startswith('@Model.'):
-                            route = Symbol.new(path, Category.ROUTE, block, value.split('.', 1)[1])
-                            graph.add_symbol_and_relation_both_ways(attribute, ctx.relation, route)
+            if attribute_name is None:
                 continue
 
-    def cross_reference(self, graph: Graph, path: str):
-        for symbol in graph.symbols.values():
-            if symbol.path != path:
+            qval = find_first_node(node, 'attribute', 'quoted_attribute_value')
+            if qval is None:
                 continue
 
-            if symbol.category == Category.USING:
-                for namespace_def in graph.symbols.values():
-                    if namespace_def.category == Category.NAMESPACE and namespace_def.name == symbol.name:
-                        graph.add_relation_both_ways(symbol, Relation.USES, namespace_def)
+            name = decode_normalize(attribute_name.text)
+            attribute = graph.new_symbol(ctx.parent, Category.BLOCK, name, block)
+            push(Context.new(attribute, depth))
 
-            if symbol.category == Category.CONTROLLER:
-                class_name = f'{symbol.name}Controller'
-                for other in graph.symbols.values():
-                    if other.category == Category.CLASS and other.name == class_name:
-                        graph.add_relation_both_ways(symbol, Relation.USES, other)
+            # An action is a method of the Controller class named by the asp-controller
+            if name.lower() == 'asp-action':
+                attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
+                action_function_name = decode_normalize(attribute_value.text)
+                ctx.parent.references.add(Reference.new(action_function_name, Category.FUNCTION))
+                continue
 
-            # FIXME: Make is stricter by checking that the class is referred as a controller
-            if symbol.category == Category.ACTION:
-                for other in graph.symbols.values():
-                    if other.category == Category.FUNCTION and other.name == symbol.name:
-                        graph.add_relation_both_ways(symbol, Relation.USES, other)
+            # Name of the controller class without the "Controller" suffix (naming convention)
+            if name.lower() == 'asp-controller':
+                attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
+                controller_class_name = decode_normalize(attribute_value.text)
+                ctx.parent.references.add(Reference.new(f'{controller_class_name}Controller', Category.TYPE))
+                continue
 
-            # FIXME: Make is stricter by checking that the class is referred as a controller
-            if symbol.category == Category.ROUTE and '.' in symbol.name:
-                for other in graph.symbols.values():
-                    class_name, propery_name = symbol.name.split('.', 1)
-                    # FIXME: Find the class owning the member variable and verify that it has class_name
-                    if other.category == Category.VARIABLE and other.name == propery_name:
-                        graph.add_relation_both_ways(symbol, Relation.USES, other)
+            # Routes to data from a model variable, reference only the data member.
+            # See also: @Model, @model and template variables)
+            if name.lower() == 'asp-route-':
+                attribute_value = find_first_node(qval, 'quoted_attribute_value', 'attribute_value')
+                model_variable_reference = decode_normalize(attribute_value.text)
+                if '.' in model_variable_reference:
+                    model_variable_name = model_variable_reference.split('.', 1)[1]
+                    ctx.parent.references.add(Reference.new(model_variable_name, Category.TYPE))

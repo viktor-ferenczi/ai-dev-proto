@@ -1,23 +1,21 @@
-import os
 from pprint import pformat
 
 from pydantic import BaseModel
 from tree_sitter import Tree, TreeCursor
 
 from .tree_sitter_util import walk_nodes, find_first_node
-from .model import Graph, Symbol, Category, Relation, Block
+from .model import Graph, Symbol, Category, Block, Reference, NAMESPACE_AWARE_CATEGORIES
 from .tree_sitter_parser import TreeSitterParser
 from ..common.util import decode_normalize
 
 
 class Context(BaseModel):
     parent: Symbol
-    relation: Relation
     depth: int
 
     @classmethod
-    def new(cls, parent: Symbol, relation: Relation, depth: int) -> 'Context':
-        return cls(parent=parent, relation=relation, depth=depth)
+    def new(cls, parent: Symbol, depth: int) -> 'Context':
+        return cls(parent=parent, depth=depth)
 
 
 class CSharpParser(TreeSitterParser):
@@ -27,12 +25,9 @@ class CSharpParser(TreeSitterParser):
     tree_sitter_language_name = 'c_sharp'
 
     def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
-        source_basename = os.path.basename(path)
-        source_name = os.path.splitext(source_basename)[0]
-        source = Symbol.new(path, Category.SOURCE, Block.from_range(0, file_line_count), source_name)
-        graph.add_symbol(source)
+        source = graph.new_source(path, file_line_count)
 
-        ctx: Context = Context.new(source, Relation.PARENT, -1)
+        ctx: Context = Context.new(source, -1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
         stack: list[Context] = []
@@ -58,117 +53,53 @@ class CSharpParser(TreeSitterParser):
             identifier = find_first_node(node, 'using_directive', 'qualified_name')
             if identifier is not None:
                 name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.USING, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
+                graph.new_symbol(ctx.parent, Category.USING, name, block)
+                ctx.parent.references.add(Reference.new(name, Category.NAMESPACE))
                 continue
 
             identifier = find_first_node(node, 'namespace_declaration', 'qualified_name')
             if identifier is not None:
                 name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.NAMESPACE, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
+                symbol = graph.new_symbol(ctx.parent, Category.NAMESPACE, name, block)
+                push(Context.new(symbol, depth))
                 continue
 
             identifier = find_first_node(node, 'interface_declaration', 'qualified_name')
+            if identifier is None:
+                identifier = find_first_node(node, 'class_declaration', 'identifier')
+            if identifier is None:
+                identifier = find_first_node(node, 'struct_declaration', 'identifier')
+            if identifier is None:
+                identifier = find_first_node(node, 'record_declaration', 'identifier')
             if identifier is not None:
                 name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.INTERFACE, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            identifier = find_first_node(node, 'class_declaration', 'identifier')
-            if identifier is not None:
-                name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.CLASS, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            identifier = find_first_node(node, 'struct_declaration', 'identifier')
-            if identifier is not None:
-                name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.STRUCT, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            identifier = find_first_node(node, 'record_declaration', 'identifier')
-            if identifier is not None:
-                name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.RECORD, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
+                symbol = graph.new_symbol(ctx.parent, Category.TYPE, name, block)
+                push(Context.new(symbol, depth))
                 continue
 
             identifier = find_first_node(node, 'method_declaration', 'identifier')
+            if identifier is None:
+                identifier = find_first_node(node, 'constructor_declaration', 'identifier')
             if identifier is not None:
                 name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.FUNCTION, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
+                symbol = graph.new_symbol(ctx.parent, Category.FUNCTION, name, block)
+                push(Context.new(symbol, depth))
                 continue
 
-            identifier = find_first_node(node, 'constructor_declaration', 'identifier')
-            if identifier is not None:
-                name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.FUNCTION, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            identifier = find_first_node(node, 'local_declaration_statement', 'variable_declaration', 'variable_declarator', 'identifier')
-            if identifier is not None:
-                name = decode_normalize(identifier.text)
-                symbol = Symbol.new(path, Category.VARIABLE, block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                symbol = Symbol.new(path, Category.STATEMENT, block)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            if node.type.endswith('_statement') and ctx.parent.category != Category.STATEMENT:
-                symbol = Symbol.new(path, Category.STATEMENT, block)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                push(Context.new(symbol, Relation.CHILD, depth))
-                continue
-
-            if node.type == 'identifier' and ctx.parent.category == Category.STATEMENT:
-                name = decode_normalize(node.text)
-                symbol = Symbol.new(path, Category.IDENTIFIER, ctx.parent.block, name)
-                graph.add_symbol_and_relation_both_ways(ctx.parent, ctx.relation, symbol)
-                continue
-
-    def cross_reference(self, graph: Graph, path: str):
-        for symbol in graph.symbols.values():
-            if symbol.path != path:
-                continue
-
-            if symbol.category == Category.USING:
-                for namespace in graph.symbols.values():
-                    if namespace.category == Category.NAMESPACE and namespace.name == symbol.name:
-                        graph.add_relation_both_ways(symbol, Relation.USES, namespace)
-                        break
-                continue
-
-            if symbol.category == Category.IDENTIFIER:
-                statement = graph.get_parent(symbol)
-                if statement is None or statement.category != Category.STATEMENT:
+            if ctx.parent.category == Category.TYPE:
+                identifier = find_first_node(node, 'field_declaration', 'variable_declaration', 'variable_declarator', 'identifier')
+                if identifier is not None:
+                    name = decode_normalize(identifier.text)
+                    symbol = graph.new_symbol(ctx.parent, Category.VARIABLE, name, block)
+                    push(Context.new(symbol, depth))
                     continue
 
-                usage_parent_function = graph.get_parent(statement)
+            if node.type == 'identifier' and ctx.parent.category in NAMESPACE_AWARE_CATEGORIES:
+                name = decode_normalize(node.text)
+                if ctx.parent.name != name or ctx.parent.block.begin < block.begin:
+                    ctx.parent.references.add(Reference.new(name, Category.TYPE))
+                    ctx.parent.references.add(Reference.new(name, Category.FUNCTION))
+                    ctx.parent.references.add(Reference.new(name, Category.VARIABLE))
+                    continue
 
-                name = symbol.name
-                for definition in graph.symbols.values():
-                    if definition.name != name:
-                        continue
-
-                    if definition.category not in (Category.VARIABLE, Category.FUNCTION, Category.CLASS, Category.STRUCT, Category.INTERFACE):
-                        continue
-
-                    definition_parent = graph.get_parent(definition)
-                    if definition_parent is not None and definition_parent.category == Category.FUNCTION and definition_parent != usage_parent_function:
-                        continue
-
-                    graph.add_relation_both_ways(statement, Relation.USES, definition)
+            # FIXME: Create references from static member variable initializers

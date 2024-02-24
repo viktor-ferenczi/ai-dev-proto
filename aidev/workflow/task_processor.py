@@ -152,12 +152,7 @@ class TaskProcessor:
             content = read_binary_file(full_path)
             parser.parse(graph, path, content)
 
-        for path in task.paths:
-            full_path = os.path.join(wc.project_dir, path)
-            parser_cls = detect_parser(full_path)
-            parser = parser_cls()
-            parser.cross_reference(graph, path)
-
+        graph.cross_reference()
         task.code_map = graph
 
     async def find_relevant_sources(self):
@@ -189,7 +184,7 @@ class TaskProcessor:
         names: Set[str] = set(json.loads(completion)['symbols'])
         # print(f'names = {names}')
 
-        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category != Category.IDENTIFIER}
+        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category != Category.REFERENCE}
         # print(f'symbols = {symbols}')
 
         paths: Set[str] = {
@@ -231,7 +226,7 @@ class TaskProcessor:
             for symbol in task.code_map.symbols.values():
                 if symbol.path != source_path:
                     continue
-                if symbol.category not in (Category.INTERFACE, Category.CLASS, Category.STRUCT, Category.RECORD, Category.FUNCTION, Category.VARIABLE):
+                if symbol.category not in (Category.TYPE, Category.FUNCTION, Category.VARIABLE):
                     continue
                 if relevant_symbol_ids & set(task.code_map.relations[symbol.id]):
                     relevant_blocks.append(symbol.block)

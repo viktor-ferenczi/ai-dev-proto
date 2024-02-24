@@ -18,7 +18,7 @@ class TestParsers(unittest.TestCase):
         graph = Graph.new()
         parser = CSharpParser()
         parser.parse(graph, path, SHOPPING_CART_CS.encode('utf-8'))
-        parser.cross_reference(graph, path)
+        graph.cross_reference()
         print(graph.model_dump_json(indent=2))
 
     def test_cshtml_parser(self):
@@ -26,5 +26,5 @@ class TestParsers(unittest.TestCase):
         graph = Graph.new()
         parser = CshtmlParser()
         parser.parse(graph, path, DEFAULT_CSHTML.encode('utf-8'))
-        parser.cross_reference(graph, path)
+        graph.cross_reference()
         print(graph.model_dump_json(indent=2))
