@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 import sys
-from typing import Optional, Type
+from typing import Optional, Type, List
 
 from magic import Magic, MagicException
 from tree_sitter import Language
@@ -11,7 +11,7 @@ from .base_parser import BaseParser
 
 ParserClass = Type[BaseParser]
 
-PARSERS: list[ParserClass] = []
+PARSERS: List[ParserClass] = []
 
 
 def register(cls: ParserClass):

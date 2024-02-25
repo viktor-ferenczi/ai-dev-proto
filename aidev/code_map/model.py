@@ -63,6 +63,12 @@ class Reference(BaseModel):
 class Symbol(BaseModel):
     """Code map graph node, represents a programming language or document format specific construct
     """
+    path: str
+    """Solution relative path of the source file this symbol is defined in"""
+
+    block: Block
+    """Block of lines which contain the entire definition"""
+
     parent: Optional[Identifier]
     """ID of the parent, source files don't have a parent"""
 
@@ -71,9 +77,6 @@ class Symbol(BaseModel):
 
     name: str
     """Name of the symbol without the namespace, solution relative path for source"""
-
-    block: Block
-    """Block of lines which contain the entire definition"""
 
     children: Set[Identifier]
     """IDs of the symbols directly under this one"""
@@ -98,13 +101,13 @@ class Symbol(BaseModel):
 
     @property
     def id(self) -> str:
-        id = f'{self.category}|{self.name}|{self.block.begin}:{self.block.end}'
+        id = f'{self.path}#{self.block.begin}:{self.block.end}|{self.category}|{self.name}'
         if C.HASH_SYMBOL_IDS:
             id = sha1(id.encode('utf-8')).hexdigest()
         return id
 
     @classmethod
-    def new(cls, parent: Optional['Symbol'], category: Category, name: str, block: Block) -> 'Symbol':
+    def new(cls, path: str, block: Block, parent: Optional['Symbol'], category: Category, name: str) -> 'Symbol':
         if parent is None:
             parent_id = None
         else:
@@ -112,10 +115,11 @@ class Symbol(BaseModel):
             parent_id = parent.id
 
         symbol = cls(
+            path=path,
+            block=block,
             parent=parent_id,
             category=category,
             name=name,
-            block=block,
             children=set(),
             dependencies=set(),
             dependents=set(),
@@ -165,12 +169,12 @@ class Graph(BaseModel):
         self.symbols.update(other.symbols)
 
     def new_source(self, path: str, file_line_count: int):
-        symbol: Symbol = Symbol.new(None, Category.SOURCE, path, Block.from_range(0, file_line_count))
+        symbol: Symbol = Symbol.new(path, Block.from_range(0, file_line_count), None, Category.SOURCE, path)
         self.symbols[symbol.id] = symbol
         return symbol
 
     def new_symbol(self, parent: Symbol, category: Category, name: str, block: Block) -> Symbol:
-        symbol: Symbol = Symbol.new(parent, category, name, block)
+        symbol: Symbol = Symbol.new(parent.path, block, parent, category, name)
         self.symbols[symbol.id] = symbol
         return symbol
 
@@ -269,6 +273,7 @@ class Graph(BaseModel):
         namespace_symbol_map: NamespaceSymbolMap = self.__map_symbols_to_namespaces()
         self.__reference_symbols(namespace_symbol_map)
         self.__cleanup(namespace_symbol_map)
+        self.__verify()
 
     def __remove_external_references(self):
         """ Eliminates references to names with no symbol defined in the source code, all of those are external code
@@ -333,5 +338,20 @@ class Graph(BaseModel):
         for id in delete:
             symbol = self.symbols[id]
             parent = self.get_parent(symbol)
-            parent.children.discard(symbol.id)
+            parent.children.remove(symbol.id)
             del self.symbols[id]
+
+    def __verify(self):
+        for symbol in self.symbols.values():
+
+            for id in symbol.children:
+                if id not in self.symbols:
+                    print(f'MISSING child {id!r} in parent {symbol.id!r}')
+
+            for id in symbol.dependencies:
+                if id not in self.symbols:
+                    print(f'MISSING dependency {id!r} in symbol {symbol.id!r}')
+
+            for id in symbol.dependents:
+                if id not in self.symbols:
+                    print(f'MISSING dependent {id!r} in symbol {symbol.id!r}')

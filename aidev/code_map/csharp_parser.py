@@ -1,4 +1,5 @@
 from pprint import pformat
+from typing import List
 
 from pydantic import BaseModel
 from tree_sitter import Tree, TreeCursor
@@ -30,7 +31,7 @@ class CSharpParser(TreeSitterParser):
         ctx: Context = Context.new(source, -1)
         if self.debug:
             print(f'CTX: {pformat(ctx)}')
-        stack: list[Context] = []
+        stack: List[Context] = []
 
         def push(c: Context):
             nonlocal ctx

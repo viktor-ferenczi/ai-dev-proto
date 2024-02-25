@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict
 
-from .model import Solution, Task, TaskState
+from .model import Solution, Task, TaskState, TASK_START_STATE
 from .task_processor import TaskProcessor
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
@@ -61,7 +61,7 @@ class TaskOrchestrator:
                 continue
 
             print(f'Task started: {task.id}')
-            task.state = TaskState.PLANNING
+            task.state = TASK_START_STATE
             self.wip_tasks[task.id] = task
             pool.run(self.process_task(task))
 

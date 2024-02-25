@@ -69,7 +69,7 @@ but never modified in place, nor any information removed from them until being d
 import bisect
 import os.path
 from itertools import pairwise
-from typing import Optional, Iterable
+from typing import Optional, Iterable, List
 
 from pydantic import BaseModel
 
@@ -155,7 +155,7 @@ class Block(BaseModel):
         return formatter()
 
 
-def insort_block(blocks: list[Block], block: Block):
+def insort_block(blocks: List[Block], block: Block):
     """Insertion sort for sorted list of blocks
     """
     if block in blocks:  # pragma: no cover
@@ -182,7 +182,7 @@ class Document(BaseModel):
     doctype: DocType
     """Document type"""
 
-    lines: list[str]
+    lines: List[str]
     """Lines of text without trailing newline"""
 
     @property
@@ -207,7 +207,7 @@ class Document(BaseModel):
         return self.doctype.code_block_type
 
     @property
-    def code_block_lines(self) -> list[str]:
+    def code_block_lines(self) -> List[str]:
         lines = [f'```{self.doctype.code_block_type}']
         lines.extend(self.lines)
         lines.append('```')
@@ -223,7 +223,7 @@ class Document(BaseModel):
     def from_text(cls, rel_path: str, text: str) -> 'Document':
         rel_path = rel_path.replace('\\', '/').lstrip('/')
         doctype = DocType.from_path(rel_path)
-        lines: list[str] = text.split('\n')
+        lines: List[str] = text.split('\n')
         return cls(path=rel_path, doctype=doctype, lines=lines)
 
     def write(self, dir_path: str) -> None:
@@ -257,10 +257,10 @@ class Hunk(BaseModel):
     block: Block
     """Block of lines in the document"""
 
-    markers: list[Block] = []
+    markers: List[Block] = []
     """Sorted markers, they cannot overlap"""
 
-    replacement: Optional[list[str]] = None
+    replacement: Optional[List[str]] = None
     """Replacement text for the hunk, potentially including markers"""
 
     @property
@@ -269,7 +269,7 @@ class Hunk(BaseModel):
         return f'[HUNK:{self.document.path}#{self.block.begin}:{self.block.end}]'
 
     @property
-    def lines(self) -> list[str]:
+    def lines(self) -> List[str]:
         return list(self.__iter_code_with_markers())
 
     @property
@@ -281,7 +281,7 @@ class Hunk(BaseModel):
         return f'```{self.document.doctype.code_block_type}\n{replace_tripple_backquote(self.text)}\n```'
 
     @property
-    def code_block_lines(self) -> list[str]:
+    def code_block_lines(self) -> List[str]:
         lines = [f'```{self.document.doctype.code_block_type}']
         lines.extend(self.lines)
         lines.append('```')
@@ -338,7 +338,7 @@ class Hunk(BaseModel):
         # Text lines after the last marker
         yield from original_lines[position:self.block.end]
 
-    def apply_replacement(self) -> list[str]:
+    def apply_replacement(self) -> List[str]:
         """Applies the replacement by substituting markers
 
         If no replacement is provided then it returns the original
@@ -375,11 +375,11 @@ class Patch(BaseModel):
     document: Document
     """Original document"""
 
-    hunks: list[Hunk]
+    hunks: List[Hunk]
     """Hunks to apply"""
 
     @classmethod
-    def from_hunks(cls, document: Document, hunks: list[Hunk]):
+    def from_hunks(cls, document: Document, hunks: List[Hunk]):
         return cls(document=document, hunks=hunks)
 
     def apply(self) -> Document:
@@ -394,7 +394,7 @@ class Patch(BaseModel):
 
         """
         self.__sort_and_verify_hunks()
-        lines: list[str] = self.__apply_sorted_hunks()
+        lines: List[str] = self.__apply_sorted_hunks()
         return Document(
             path=self.document.path,
             doctype=self.document.doctype,
@@ -417,10 +417,10 @@ class Patch(BaseModel):
             if a.is_overlapping(b):
                 raise ValueError(f'Overlapping hunks: {a.id}, {b.id}')
 
-    def __apply_sorted_hunks(self) -> list[str]:
+    def __apply_sorted_hunks(self) -> List[str]:
         original_lines = self.document.lines
 
-        lines: list[str] = []
+        lines: List[str] = []
 
         position: int = 0
         for hunk in self.hunks:
@@ -442,9 +442,9 @@ class Patch(BaseModel):
         if len(code_blocks) > 1:
             raise ValueError(f'More than one code block found in the completion')
 
-        hunks: list[Hunk] = []
+        hunks: List[Hunk] = []
         code_block: str = code_blocks[0]
-        code_lines: list[str] = code_block.split('\n')
+        code_lines: List[str] = code_block.split('\n')
 
         for block in iter_find_partial_blocks(document.lines, code_lines):
             hunk = Hunk.from_document(document, block)
@@ -480,7 +480,7 @@ class Patch(BaseModel):
         self.hunks[:] = [hunk]
 
 
-def iter_find_partial_blocks(doc: list[str], block: list[str]) -> Iterable[Block]:
+def iter_find_partial_blocks(doc: List[str], block: List[str]) -> Iterable[Block]:
     doc_len = len(doc)
     block_len = len(block)
 

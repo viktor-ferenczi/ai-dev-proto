@@ -1,8 +1,7 @@
-from typing import Iterator, Tuple, Union, Iterable, Optional
+from typing import Iterator, Tuple, Iterable, Optional, List
 
 from tree_sitter import TreeCursor, Node
 
-from ..common.config import C
 from ..common.util import decode_normalize, count_lines
 
 
@@ -75,7 +74,7 @@ def find_first_node(parent: Node, parent_type, *types: str) -> Optional[Node]:
     return node
 
 
-def find_first_nodes(parent: Node, *type_lists: Iterable[str]) -> Optional[list[Node]]:
+def find_first_nodes(parent: Node, *type_lists: Iterable[str]) -> Optional[List[Node]]:
     assert type_lists
     nodes = [find_first_node(parent, *typs) for typs in type_lists]
     if any(node is None for node in nodes):

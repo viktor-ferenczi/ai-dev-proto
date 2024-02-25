@@ -3,7 +3,7 @@ import time
 
 import unittest
 from logging import DEBUG
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
 
@@ -189,7 +189,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(0, failed)
 
-    async def do_parallel_load(self, question_count: int, constraint: Optional[Constraint]=None, **extra) -> list[str]:
+    async def do_parallel_load(self, question_count: int, constraint: Optional[Constraint]=None, **extra) -> List[str]:
         kws = dict(temperature=0.5, **extra)
         print(f'Params: {kws!r}')
 

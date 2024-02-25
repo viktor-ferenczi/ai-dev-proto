@@ -1,4 +1,5 @@
 import asyncio
+from typing import List
 
 from ..common.async_helpers import AsyncPool
 from ..engine.engine import Engine
@@ -11,7 +12,7 @@ class GenerationOrchestrator:
     def __init__(self, solution: Solution):
         super().__init__()
         self.solution: Solution = solution
-        self.engines: list[Engine] = []
+        self.engines: List[Engine] = []
         self.max_parallel_generations = 0
 
     def register_engine(self, engine: Engine):

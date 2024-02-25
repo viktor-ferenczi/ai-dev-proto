@@ -1,7 +1,7 @@
 import asyncio
 import os
 from subprocess import check_output, Popen, STDOUT, PIPE
-from typing import Optional, Set
+from typing import Optional, Set, List
 
 from ..common.config import C
 from ..common.util import iter_tree
@@ -44,19 +44,19 @@ class WorkingCopy:
         if os.path.exists(self.config_path):
             C.load(self.config_path)
 
-    def run_command(self, action: str, command: list[str], *, shell=False) -> (int, str):
+    def run_command(self, action: str, command: List[str], *, shell=False) -> (int, str):
         print(f'Command to {action}: {" ".join(command)}')
         process = Popen(command, cwd=self.project_dir, stdout=PIPE, stderr=STDOUT, shell=shell)
         output, _ = process.communicate()
         return process.returncode, output.decode('utf-8')
 
-    def try_run_command(self, action: str, command: list[str], *, shell=False) -> str:
+    def try_run_command(self, action: str, command: List[str], *, shell=False) -> str:
         exit_code, output = self.run_command(action, command, shell=shell)
         if exit_code:
             return f'Failed to {action}: {command!r}\nExit code: {exit_code}\nOutput:\n{output}'
         return ''
 
-    def must_run_command(self, action: str, command: list[str], *, shell=False):
+    def must_run_command(self, action: str, command: List[str], *, shell=False):
         error = self.try_run_command(action, command, shell=shell)
         if error:
             raise RuntimeError(error)
@@ -120,6 +120,13 @@ class WorkingCopy:
 
         _, output = self.run_command('check staged changes', ['git', 'status'])
         return 'nothing to commit, working tree clean' not in output
+
+    def get_commit_hash(self) -> str:
+        if not self.has_repository:
+            return ''
+
+        return_code, output = self.run_command('get commit hash', ['git', 'rev-parse', 'HEAD'])
+        return '' if return_code else output
 
     def list_ignored_paths(self) -> Optional[Set[str]]:
         if not self.has_repository:

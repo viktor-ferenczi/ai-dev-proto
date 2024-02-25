@@ -39,7 +39,7 @@
 
     You can modify or delete these existing files (paths):
 
-    {% for path in source_paths %}
+    {% for path in task.relevant_paths %}
         - `{{ path }}`
     {% endfor %}
 
@@ -65,11 +65,9 @@
 
 <ORIGINAL-SOURCE-CODE>
 
-    {% for source in task.sources %}
+    {% for hunk in task.relevant_hunks %}
 
-        {% set doc = source.document %}
-        {% set hunk = source.relevant %}
-        {% set path = doc.path %}
+        {% set path = task.relevant_paths[loop.index0] %}
         {% set code_block = hunk.code_block %}
         {% include 'code_block.jinja' with context %}
 

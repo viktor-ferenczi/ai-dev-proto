@@ -1,8 +1,7 @@
-import asyncio
 import os
 from asyncio import Event
 from traceback import format_exc
-from typing import Optional, Iterable, Dict
+from typing import Optional, Iterable, Dict, List, Set
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -10,7 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from ..code_map.model import Graph
 from ..common.config import C
 from ..common.util import SimpleEnum
-from ..editing.model import Patch, Document, Hunk
+from ..editing.model import Hunk
 from ..engine.engine import Engine
 from ..engine.params import GenerationParams
 
@@ -45,7 +44,7 @@ class Generation(BaseModel):
     params: GenerationParams
     """Parameters to select a model and control the text generation"""
 
-    completions: Optional[list[str]] = None
+    completions: Optional[List[str]] = None
     """List of text completions once the LLM has finished generating"""
 
     error: Optional[str] = None
@@ -96,59 +95,6 @@ class Generation(BaseModel):
         await self.finish_event.wait()
 
 
-class SourceState(SimpleEnum):
-    """Represents possible states of Source"""
-    PENDING = "PENDING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-    SKIP = "SKIP"
-
-
-class Source(BaseModel):
-    """Represents the full state of preparing and completing the corresponding task on a single source file"""
-
-    state: SourceState
-    """The current state of the source file, which can be NEW, RELEVANCE, LOOKUP, IMPLEMENTATION, MODIFIED, or FAILED"""
-
-    document: Document
-    """The original source file contents"""
-
-    relevant_generation: Optional[Generation] = None
-    """Text generation to find the relevant part of the source code"""
-
-    relevant: Optional[Hunk] = None
-    """Relevant part of the code"""
-
-    patch_generation: Optional[Generation] = None
-    """Text generation to actually implement the change"""
-
-    patch: Optional[Patch] = None
-    """Hunks from the LLM generated implementation completion"""
-
-    implementation: Optional[Document] = None
-    """Source file contents with the implementation (patch) applied"""
-
-    error: Optional[str] = None
-    """Error message in FAILED state"""
-
-    @classmethod
-    def from_file(cls, dir_path: str, rel_path: str):
-        return cls(
-            state=SourceState.PENDING,
-            document=Document.from_file(dir_path, rel_path),
-        )
-
-    def iter_generations(self) -> Iterable[Generation]:
-        if self.state != SourceState.PENDING:
-            return
-
-        if self.relevant_generation is not None:
-            yield self.relevant_generation
-
-        if self.patch_generation is not None:
-            yield self.patch_generation
-
-
 class Feedback(BaseModel):
     """Represents constructive feedback on a FAILED or REJECTED task"""
 
@@ -162,6 +108,7 @@ class Feedback(BaseModel):
 class TaskState(SimpleEnum):
     """Possible states of a Task"""
     NEW = "NEW"
+    PARSING = "PARSING"
     PLANNING = "PLANNING"
     CODING = "CODING"
     TESTING = "TESTING"
@@ -172,10 +119,13 @@ class TaskState(SimpleEnum):
 
 
 TASK_WIP_STATES = (
+    TaskState.PARSING,
     TaskState.PLANNING,
     TaskState.CODING,
     TaskState.TESTING,
 )
+
+TASK_START_STATE = TASK_WIP_STATES[0]
 
 
 class Task(BaseModel):
@@ -187,59 +137,44 @@ class Task(BaseModel):
     ticket: str
     """External reference, for example, a Gitlab ticket ID or URL"""
 
-    description: str
-    """Task description copied from the ticket (Markdown formatted)"""
-
     branch: str
     """Name of the Git branch to commit to, must be unique between active tasks"""
 
-    parent: Optional[str] = None
-    """ID of the parent task, used only for sub-tasks (defines a dependency tree)"""
-
-    retried: Optional[str] = None
-    """ID of the previous attempt to accomplish the same task (retry)"""
+    description: str
+    """Task description copied from the ticket (Markdown formatted)"""
 
     state: TaskState = TaskState.NEW
     """Current state of the task"""
 
-    paths: Optional[list[str]] = None
-    """Paths of all source files in the solution which may be considered"""
+    attempt: int = 0
+    """Attempt index, valid in work-in-progress states"""
+
+    commit_hash: Optional[str] = None
+    """Git commit hash the work is based on when the task is started"""
+
+    paths: Optional[List[str]] = None
+    """Solution relative paths of all source files in the solution which may be considered when the task is started"""
 
     code_map: Optional[Graph] = None
-    """Code map constructed from parsing all the source files before making any changes"""
+    """Code map constructed from parsing all the source files when the task is started"""
 
-    relevant_symbols_generation: Optional[Generation] = None
-    """Text generation used to extract the name of relevant symbols from the task description"""
+    relevant_symbols: Optional[Set[str]] = None
+    """IDs of the relevant symbols required to work on the task"""
 
-    relevant_symbols: Optional[list[str]] = None
-    """List of the IDs of the relevant symbols required to work on the task"""
+    relevant_paths: Optional[List[str]] = None
+    """List of relative source paths of the relevant source files"""
 
-    sources: Optional[list[Source]] = None
-    """Source files that need to be modified, extended during planning"""
-
-    planning_generations: Optional[list[Generation]] = None
-    """Planning generations"""
+    relevant_hunks: Optional[List[Hunk]] = None
+    """List of hunks with the relevant parts of the source files"""
 
     plan: Optional[str] = None
     """Step-by-step plan to implement the task"""
 
-    patch_generation: Optional[Generation] = None
-    """Text generation to actually implement the change to one or more source code hunks at the same time"""
-
-    integration_generations: Optional[list[Generation]] = None
-    """Text generations to integrate code changes"""
-
-    feedback_generation: Optional[Generation] = None
-    """Text generation to evaluate the build or test results or errors"""
-
-    feedback: Optional[Feedback] = None
-    """Feedback after a failed build or test, appended to former_feedbacks on cloning the task for a retry"""
-
-    previous_feedbacks: Optional[list[Feedback]] = None
-    """Feedbacks provided on previous failed attempts (redundant, prevents recursive queries)"""
-
     pr: Optional[str] = None
     """Reference of the PR to review the changes committed to the branch"""
+
+    generations: Optional[List[Generation]] = None
+    """Text generation requests used while working on the task"""
 
     error: Optional[str] = None
     """Error message in FAILED state"""
@@ -253,28 +188,8 @@ class Task(BaseModel):
         return self.state == TaskState.NEW or self.is_wip
 
     def iter_generations(self) -> Iterable[Generation]:
-        if not self.is_wip:
-            return
-
-        if self.relevant_symbols_generation is not None:
-            yield self.relevant_symbols_generation
-
-        if self.planning_generations is not None:
-            yield from self.planning_generations
-
-        if self.patch_generation is not None:
-            yield self.patch_generation
-
-        if self.integration_generations is not None:
-            yield from self.integration_generations
-
-        if self.feedback_generation is not None:
-            yield self.feedback_generation
-
-        if self.sources is not None:
-            for source in self.sources:
-                assert isinstance(source, Source)
-                yield from source.iter_generations()
+        if self.is_wip and self.generations:
+            yield from self.generations
 
 
 class Solution(BaseModel):
@@ -283,7 +198,7 @@ class Solution(BaseModel):
     name: str
     """Name of the solution, also used as project name in SonarQube"""
 
-    # FIXME: Implement multiple working copy folders to support parallel build and testing
+    # TODO: Introduce multiple working copies
     folder: str
     """Working copy folder"""
 

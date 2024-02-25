@@ -3,7 +3,7 @@ import asyncio
 import sys
 import os
 from logging import DEBUG
-from typing import Optional
+from typing import Optional, List
 
 from aidev.code_map.parsers import init_tree_sitter
 from aidev.common.config import C
@@ -55,7 +55,7 @@ class ArgParser(argparse.ArgumentParser):
         return '\n'.join(subcommand_helps)
 
 
-async def main(argv: Optional[list[str]] = None):
+async def main(argv: Optional[List[str]] = None):
     if argv is None:
         argv = sys.argv[1:]
 
@@ -147,8 +147,8 @@ async def command_fix(project: WorkingCopy, branch: str, source: str):
         task = Task(
             id=issue.key,
             ticket=issue.key,
-            description=description,
             branch=branch,
+            description=description,
         )
 
         solution.tasks[task.id] = task

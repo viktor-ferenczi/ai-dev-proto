@@ -1,6 +1,6 @@
 import json
 import unittest
-from typing import Set
+from typing import Set, List
 
 from aidev.common.util import join_lines
 from aidev.editing.model import Document, Block, Hunk, Patch
@@ -58,7 +58,7 @@ class TestEditingModel(unittest.TestCase):
     def test_edit_no_change(self):
         doc = self.document
 
-        def check(hunks: list[Hunk]):
+        def check(hunks: List[Hunk]):
             patch = Patch.from_hunks(doc, hunks)
             edited_doc = patch.apply()
             self.assertEqual(join_lines(doc.lines), join_lines(edited_doc.lines))
@@ -82,7 +82,7 @@ class TestEditingModel(unittest.TestCase):
     def test_edit_invalid_hunks(self):
         doc = self.document
 
-        def check(hunks: list[Hunk]):
+        def check(hunks: List[Hunk]):
             patch = Patch.from_hunks(doc, hunks)
             self.assertRaises(ValueError, patch.apply)
 

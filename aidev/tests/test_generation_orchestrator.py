@@ -1,11 +1,12 @@
 import asyncio
 import os
 import unittest
+from typing import List
 
 from aidev.engine.params import GenerationParams
 from aidev.engine.vllm_engine import VllmEngine
 from aidev.workflow.generation_orchestrator import GenerationOrchestrator
-from aidev.workflow.model import Solution, Task, TaskState, Source, GenerationState, Generation
+from aidev.workflow.model import Solution, Task, TaskState, GenerationState, Generation
 
 SCRIPT_DIR = os.path.dirname(__file__)
 
@@ -15,7 +16,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
     async def test_generations(self):
         solution = Solution.new('Test', os.path.dirname(__file__))
 
-        generations: list[Generation] = []
+        generations: List[Generation] = []
 
         def create_generation():
             generation = Generation.new('test', 'You are a helpful C# coding assistant.', '''
@@ -25,24 +26,17 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
             generations.append(generation)
             return generation
 
-        def create_source():
-            source = Source.from_file(SCRIPT_DIR, __file__)
-            source.relevant_generation = create_generation()
-            source.patch_generation = create_generation()
-            return source
-
         task = Task(
             id='Test-1',
             ticket='Ticket-1',
             description='description',
             branch='branch',
             state=TaskState.PLANNING,
-            feedback_generation=create_generation(),
-            sources=[create_source(), create_source()],
+            generations=[create_generation(), create_generation()],
         )
         solution.tasks[task.id] = task
 
-        self.assertEqual(5, len(generations))
+        self.assertEqual(2, len(generations))
 
         orchestrator = GenerationOrchestrator(solution)
 

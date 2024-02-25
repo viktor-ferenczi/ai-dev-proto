@@ -6,11 +6,11 @@ from typing import Set, List
 from pydantic import BaseModel
 
 from .model import Solution, Task, GenerationState, Generation
-from .model import TaskState, Source, Feedback
+from .model import TaskState
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
 from .working_copy import WorkingCopy
-from ..code_map.model import Graph, Category, Symbol, Relation
+from ..code_map.model import Graph, Category, Symbol
 from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines
 from ..editing.model import Patch, Block, Hunk, Document
@@ -32,6 +32,13 @@ class TaskProcessor:
         self.task: Task = task
         self.wc: WorkingCopy = working_copy
 
+        self.state_processors = {
+            TaskState.PARSING: self.do_parsing,
+            TaskState.PLANNING: self.do_planning,
+            TaskState.CODING: self.do_coding,
+            TaskState.TESTING: self.do_testing,
+        }
+
     async def run(self):
         async with self.wc:
             self.wc.ensure_branch(self.task.branch)
@@ -44,41 +51,12 @@ class TaskProcessor:
         try:
             self.dump_task()
 
-            if task.state == TaskState.PLANNING:
-
-                # FIXME: Produce only once for each git hash
-                await self.find_source_files()
-                if task.state == TaskState.FAILED:
-                    return
-
-                # FIXME: Produce only once for each git hash
-                await self.build_code_map()
-                if task.state == TaskState.FAILED:
-                    return
-
-                await self.find_relevant_sources()
-                if task.state == TaskState.FAILED:
-                    return
-
+            while task.is_wip:
+                previous_state = task.state
+                processor = self.state_processors[task.state]
+                await processor()
                 self.dump_task()
-
-                if task.plan is None:
-                    await self.plan()
-                if task.state == TaskState.FAILED:
-                    return
-
-                self.dump_task()
-
-            if task.state == TaskState.CODING:
-                await self.code_task()
-                self.dump_task()
-
-            if task.state == TaskState.TESTING:
-                await self.build_and_test_task()
-                self.dump_task()
-
-            if task.state == TaskState.REVIEW:
-                print(f'Task completed: {task.id}')
+                assert task.state != previous_state, f'Task state has not progressed from {previous_state}'
 
         except Exception:
             tb = traceback.format_exc()
@@ -88,10 +66,12 @@ class TaskProcessor:
             print(tb)
             print('---')
 
-        if task.state == TaskState.FAILED:
+        if task.state == TaskState.REVIEW:
+            print(f'Task completed: {task.id}')
+        elif task.state == TaskState.FAILED:
             print(f'Task failed: {task.id}')
-
-        self.dump_task()
+        else:
+            print(f'Task {task.id} has invalid state: {task.state}')
 
     def dump_task(self) -> None:
         task = self.task
@@ -105,6 +85,32 @@ class TaskProcessor:
 
         if task.state == TaskState.REVIEW:
             write_text_file(self.wc.latest_path, task_md)
+
+    async def do_parsing(self):
+        task = self.task
+        task.generations = []
+
+        commit_hash = self.wc.get_commit_hash()
+        if not commit_hash:
+            task.state = TaskState.FAILED
+            task.error = 'Could not get the Git commit hash'
+            return
+
+        # FIXME: Produce only once for each git hash
+        await self.find_source_files()
+        if task.state == TaskState.FAILED:
+            return
+
+        # FIXME: Produce only once for each git hash
+        await self.build_code_map()
+        if task.state == TaskState.FAILED:
+            return
+
+        await self.find_relevant_sources()
+        if task.state == TaskState.FAILED:
+            return
+
+        task.state = TaskState.PLANNING
 
     async def find_source_files(self):
         task = self.task
@@ -153,13 +159,16 @@ class TaskProcessor:
             parser.parse(graph, path, content)
 
         graph.cross_reference()
+
         task.code_map = graph
 
     async def find_relevant_sources(self):
+        wc = self.wc
         task = self.task
+        code_map = task.code_map
 
         class Response(BaseModel):
-            symbols: list[str]
+            symbols: List[str]
 
         schema = Response.model_json_schema()
 
@@ -171,7 +180,8 @@ class TaskProcessor:
         constraint = Constraint.from_json_schema(schema)
         params = GenerationParams(max_tokens=1000, temperature=0.2, constraint=constraint)
         gen = Generation.new('find_relevant_symbols', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-        task.relevant_symbols_generation = gen
+
+        task.generations.append(gen)
         await gen.wait()
 
         if gen.state == GenerationState.FAILED:
@@ -182,81 +192,60 @@ class TaskProcessor:
         completion = gen.completions[0]
 
         names: Set[str] = set(json.loads(completion)['symbols'])
-        # print(f'names = {names}')
+        relevant_symbols = {symbol for symbol in code_map.symbols.values() if symbol.name in names}
 
-        symbols = {symbol for symbol in task.code_map.symbols.values() if symbol.name in names and symbol.category != Category.REFERENCE}
-        # print(f'symbols = {symbols}')
+        related_symbols: Set[Symbol] = set()
+        for symbol in relevant_symbols:
+            related_symbols.update(code_map.iter(symbol.dependencies))
+            related_symbols.update(code_map.iter(symbol.dependents))
 
-        paths: Set[str] = {
-            path
-            for path in task.paths
-            if path in task.description
-        }
-        # print(f'paths = {paths}')
+        relevant_symbols.update(related_symbols)
 
-        dependent_symbols: Set[Symbol] = set()
-        for symbol in symbols:
-            # print(f'? symbol = {symbol}')
-            for relation, used_by in task.code_map.iter_related(symbol):
-                if relation == Relation.USED_BY:
-                    # print(f'=> used_by = {used_by}')
-                    dependent_symbols.add(used_by)
-        # print(f'dependent_symbols = {dependent_symbols}')
-
-        symbols.update(dependent_symbols)
-        paths.update(symbol.path for symbol in symbols)
-        # print(f'symbols = {symbols}')
-        # print(f'paths = {paths}')
-
-        if not symbols or not paths:
+        if not related_symbols:
             task.state = TaskState.FAILED
-            task.error = f'Could not narrow down the symbols and files to work on based on the task description'
+            task.error = f'Could not narrow down the relevant part of the code to work on based on the task description'
             return
 
-        task.relevant_symbols = sorted(symbol.id for symbol in symbols)
-        task.sources = [
-            Source.from_file(self.wc.project_dir, path)
-            for path in paths
-        ]
+        relevant_symbol_ids = {symbol.id for symbol in relevant_symbols}
+        relevant_source_set = {code_map.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols}
+        relevant_sources: List[Symbol] = sorted(relevant_source_set, key=lambda source: source.name)
 
-        relevant_symbol_ids = set(task.relevant_symbols)
-        for source in task.sources:
-            source_path = source.document.path
-            relevant_blocks: list[Block] = []
-            for symbol in task.code_map.symbols.values():
-                if symbol.path != source_path:
-                    continue
-                if symbol.category not in (Category.TYPE, Category.FUNCTION, Category.VARIABLE):
-                    continue
-                if relevant_symbol_ids & set(task.code_map.relations[symbol.id]):
+        relevant_hunks: List[Hunk] = []
+        for source in relevant_sources:
+
+            relevant_blocks: List[Block] = []
+            for symbol, depth in code_map.walk_children(source):
+                if symbol.id in relevant_symbol_ids:
                     relevant_blocks.append(symbol.block)
 
-            if not relevant_blocks:
-                source.relevant = Hunk.from_document(source.document, Block.from_range(0, 1))
-            elif len(relevant_blocks) == 1:
-                source.relevant = Hunk.from_document(source.document, relevant_blocks[0])
-            else:
-                relevant_blocks.sort(key=lambda b: b.begin)
-                merged_blocks = [relevant_blocks[0]]
-                for b in relevant_blocks[1:]:
-                    last = merged_blocks[-1]
-                    if b.end <= last.end:
-                        continue
-                    if b.begin < last.end:
-                        merged_blocks.append(Block.from_range(last.end, b.end))
-                        continue
-                    merged_blocks.append(Block.from_range(b.begin, b.end))
+            assert relevant_blocks, f'No relevant blocks found in source: {source.name}'
 
-                hunks = [Hunk.from_document(source.document, b) for b in merged_blocks]
-                patch = Patch.from_hunks(source.document, hunks)
-                patch.merge_hunks()
-                source.relevant = patch.hunks[0]
+            relevant_blocks.sort(key=lambda b: b.begin)
 
-        task.state = TaskState.CODING
+            merged_blocks = [relevant_blocks[0]]
+            for b in relevant_blocks[1:]:
+                last = merged_blocks[-1]
+                if b.end <= last.end:
+                    continue
+                if b.begin < last.end:
+                    merged_blocks.append(Block.from_range(last.end, b.end))
+                    continue
+                merged_blocks.append(Block.from_range(b.begin, b.end))
 
-    async def plan(self):
+            document = Document.from_file(wc.project_dir, source.name)
+            hunks = [Hunk.from_document(document, b) for b in merged_blocks]
+            patch = Patch.from_hunks(document, hunks)
+            patch.merge_hunks()
+            hunk = patch.hunks[0]
+            relevant_hunks.append(hunk)
+
+        task.relevant_symbols = relevant_symbol_ids
+        task.relevant_paths = [source.name for source in relevant_sources]
+        task.relevant_hunks = relevant_hunks
+
+    async def do_planning(self):
         task = self.task
-        task.planning_generations = []
+        task.generations = []
 
         instruction = render_workflow_template(
             'plan',
@@ -264,10 +253,8 @@ class TaskProcessor:
         )
         params = GenerationParams(n=8, beam_search=True, max_tokens=1000, temperature=0.7)
         plan_gen = Generation.new('plan', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-        task.planning_generations.append(plan_gen)
-        self.dump_task()
+        task.generations.append(plan_gen)
         await plan_gen.wait()
-        self.dump_task()
         if plan_gen.state != GenerationState.COMPLETED:
             task.state = TaskState.FAILED
             task.error = 'Planning generation failed'
@@ -287,10 +274,8 @@ class TaskProcessor:
                 constraint = Constraint.from_json_schema(COMPARE_PLANS_RESPONSE_SCHEMA)
                 params = GenerationParams(n=11, max_tokens=1000, temperature=0.5, constraint=constraint)
                 compare_gen = Generation.new('compare_plans', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-                task.planning_generations.append(compare_gen)
-                self.dump_task()
+                task.generations.append(compare_gen)
                 await compare_gen.wait()
-                self.dump_task()
                 if compare_gen.state != GenerationState.COMPLETED:
                     task.state = TaskState.FAILED
                     task.error = f'Plan comparison generation failed: {compare_gen.error}'
@@ -306,20 +291,17 @@ class TaskProcessor:
         task.plan = plan_gen.completions[completion_indices[0]]
         task.state = TaskState.CODING
 
-    async def code_task(self):
+    async def do_coding(self):
         task = self.task
 
-        if not task.sources:
+        if not task.relevant_paths or not task.relevant_hunks:
             task.state = TaskState.FAILED
             task.error = f'No source files to change'
             return
 
-        source_paths = {source.document.path for source in task.sources}
-
         instruction = render_workflow_template(
             'implement_task',
             task=task,
-            source_paths=source_paths,
         )
 
         pattern = rf'(Path: `(.*?)`\n\n`{{3}}([a-z]+)\n(\n|[^`].*?\n)*`{{3}}\n+)+'
@@ -327,21 +309,17 @@ class TaskProcessor:
         params = GenerationParams(n=8, beam_search=True, temperature=0.2, constraint=constraint)
         gen = Generation.new('implement_task', C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
-        task.patch_generation = gen
-        self.dump_task()
+        task.generations.append(gen)
         await gen.wait()
-        self.dump_task()
 
         if gen.state == GenerationState.FAILED:
             task.state = TaskState.FAILED
             task.error = f'Failed to implement the task'
             return
 
-        task.integration_generations = []
-
         for i, completion in enumerate(gen.completions):
             print(f'Trying to apply change from completion {i}')
-            error = await self.apply_code_changes(completion, source_paths)
+            error = await self.apply_code_changes(completion)
             if not task.is_wip:
                 return
             if not error:
@@ -350,7 +328,7 @@ class TaskProcessor:
 
         task.state = TaskState.TESTING
 
-    async def apply_code_changes(self, completion: str, source_paths: Set[str]) -> str:
+    async def apply_code_changes(self, completion: str) -> str:
         task = self.task
 
         completion_lines = completion.split('\n')
@@ -437,9 +415,7 @@ class TaskProcessor:
         constraint = Constraint.from_regex(rf'```{document.code_block_type}\n(\n|[^`].*?\n)+```\n\n')
         params = GenerationParams(n=4, temperature=0.2, constraint=constraint)
         gen = Generation.new('reintegrate_change', C.SYSTEM_CODING_ASSISTANT, instruction, params)
-        task.integration_generations.append(gen)
-
-        self.dump_task()
+        task.generations.append(gen)
         await gen.wait()
 
         if gen.state == GenerationState.FAILED:
@@ -456,7 +432,7 @@ class TaskProcessor:
 
         write_text_file(os.path.join(self.wc.project_dir, document.path), modified_code)
 
-    async def build_and_test_task(self):
+    async def do_testing(self):
         task = self.task
         wc = self.wc
 
@@ -500,7 +476,7 @@ class TaskProcessor:
         params = GenerationParams(max_tokens=500, temperature=0.2)
         gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
-        task.feedback_generation = gen
+        task.generations.append(gen)
         await gen.wait()
 
         if gen.state == GenerationState.FAILED:
@@ -517,10 +493,10 @@ class TaskProcessor:
             task.error = f'Failed to generate feedback, all completions are empty.'
             return
 
-        task.feedback = Feedback(
-            critic=critic,
-            criticism=completion,
-        )
+        # task.feedback = Feedback(
+        #     critic=critic,
+        #     criticism=completion,
+        # )
 
         # Do NOT append the feedback to task.feedbacks here,
         # that will happen on cloning the task for a retry

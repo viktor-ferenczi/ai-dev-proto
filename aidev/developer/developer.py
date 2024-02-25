@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, List
 
 from .fixture_coder import FixtureCoder
 from .mvc import Controller, Method
@@ -50,7 +50,7 @@ class Developer:
     async def fix_issues(self, branch_name: str):
         self.prepare_working_copy(branch_name)
 
-        issues: list[Issue] = []
+        issues: List[Issue] = []
 
         def query_open_issues():
             issues[:] = [i for i in self.sonar.get_issues() if i.status == IssueStatus.OPEN]
@@ -95,7 +95,7 @@ class Developer:
                     for method in controller.methods:
                         yield (controller, method)
 
-            controller_methods: list[Tuple[Controller, Method]] = [
+            controller_methods: List[Tuple[Controller, Method]] = [
                 (controller, method)
                 for controller, method in iter_methods()
                 if method.coverage.branch_rate == 0

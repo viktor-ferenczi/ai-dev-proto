@@ -9,13 +9,11 @@
 
     - Branch: {{ task.branch }}
 
-    - Parent task: {{ task.parent }}
-
-    - Retried task: {{ task.retried }}
+    - Commit: {{ task.commit_hash }}
 
     - State: {{ task.state }}
 
-    - PR: {{ task.state }}
+    - PR: {{ task.pr }}
 
 </details>
 
@@ -36,118 +34,15 @@
 {% endif %}
 
 
-{% if task.relevant_symbols_generation %}
+{% if task.generations %}
 
-    ---
+    ### Generations
 
-    <details>
-        <summary>Relevant symbols generation</summary>
-        {% set generation = task.relevant_symbols_generation %}
-        {% include 'generation.jinja' with context %}
-    </details>
-
-{% endif %}
-
-
-{% if task.planning_generations %}
-
-    ---
-
-    <details>
-        <summary>Planning generations</summary>
-        {% for generation in task.planning_generations %}
-            <details>
-                <summary>{{ generation.label }}</summary>
-                {% include 'generation.jinja' with context %}
-            </details>
-        {% endfor %}
-    </details>
-
-{% endif %}
-
-
-{% if task.sources %}
-    {% for source in task.sources %}
-
-        ---
-
+    {% for generation in task.generations %}
         <details>
-            <summary>Source: {{ source.document.path }}</summary>
-            {% include 'source.jinja' with context %}
+            <summary>Generation #{{ loop.index }}</summary>
+            {% include 'generation.jinja' with context %}
         </details>
-
-        ---
-
     {% endfor %}
-{% endif %}
-
-
-{% if task.patch_generation %}
-
-    ---
-
-    <details>
-        <summary>Patch generation</summary>
-        {% set generation = task.patch_generation %}
-        {% include 'generation.jinja' with context %}
-    </details>
 
 {% endif %}
-
-
-{% if task.integration_generations %}
-
-    ---
-
-    <details>
-        <summary>Reintegrate generations</summary>
-        {% for generation in task.integration_generations %}
-            <details>
-                <summary>{{ generation.label }}</summary>
-                {% include 'generation.jinja' with context %}
-            </details>
-        {% endfor %}
-    </details>
-
-{% endif %}
-
-
-{% if task.feedback_generation %}
-
-    ---
-
-    <details>
-        <summary>Feedback generation</summary>
-        {% set generation = task.feedback_generation %}
-        {% include 'generation.jinja' with context %}
-    </details>
-
-{% endif %}
-
-
-{% if task.feedback %}
-
-    ---
-
-    {% set feedback = task.feedback %}
-    <details>
-        <summary>Feedback on {{ feedback.critic }} error</summary>
-        {% include 'feedback.jinja' with context %}
-    </details>
-
-{% endif %}
-
-
-{% if task.previous_feedbacks %}
-
-    ---
-
-    <details>
-        <summary>Previous feedbacks</summary>
-        {% for feedback in task.previous_feedbacks %}
-            {% include 'feedback.jinja' with context %}
-        {% endfor %}
-    </details>
-
-{% endif %}
-

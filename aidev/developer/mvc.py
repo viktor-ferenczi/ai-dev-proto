@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic import BaseModel
 from lxml import etree
 
@@ -30,7 +32,7 @@ class Method(BaseModel):
     name: str
     signature: str
     view: View
-    models: list[Model]
+    models: List[Model]
     coverage: Coverage
     test_path: str
     output_path: str
@@ -40,5 +42,5 @@ class Method(BaseModel):
 class Controller(BaseModel):
     name: str
     path: str
-    methods: list[Method]
+    methods: List[Method]
     coverage: Coverage
