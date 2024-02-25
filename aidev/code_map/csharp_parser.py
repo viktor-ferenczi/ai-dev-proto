@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from tree_sitter import Tree, TreeCursor
 
 from .tree_sitter_util import walk_nodes, find_first_node
-from .model import Graph, Symbol, Category, Block, Reference, NAMESPACE_AWARE_CATEGORIES
+from .model import CodeMap, Symbol, Category, Block, Reference, NAMESPACE_AWARE_CATEGORIES
 from .tree_sitter_parser import TreeSitterParser
 from ..common.util import decode_normalize
 
@@ -24,8 +24,9 @@ class CSharpParser(TreeSitterParser):
     extensions = ('cs',)
     mime_types = ('text/x-csharp',)
     tree_sitter_language_name = 'c_sharp'
+    debug = True
 
-    def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
+    def collect(self, graph: CodeMap, path: str, tree: Tree, file_line_count: int):
         source = graph.new_source(path, file_line_count)
 
         ctx: Context = Context.new(source, -1)
@@ -65,7 +66,12 @@ class CSharpParser(TreeSitterParser):
                 push(Context.new(symbol, depth))
                 continue
 
-            identifier = find_first_node(node, 'interface_declaration', 'qualified_name')
+            # FIXME: Missing type alias
+            # FIXME: Enum not tested
+
+            identifier = find_first_node(node, 'enum_declaration', 'identifier')
+            if identifier is None:
+                identifier = find_first_node(node, 'interface_declaration', 'identifier')
             if identifier is None:
                 identifier = find_first_node(node, 'class_declaration', 'identifier')
             if identifier is None:
@@ -88,7 +94,9 @@ class CSharpParser(TreeSitterParser):
                 continue
 
             if ctx.parent.category == Category.TYPE:
-                identifier = find_first_node(node, 'field_declaration', 'variable_declaration', 'variable_declarator', 'identifier')
+                identifier = find_first_node(node, 'property_declaration', 'identifier')
+                if identifier is None:
+                    identifier = find_first_node(node, 'field_declaration', 'variable_declaration', 'variable_declarator', 'identifier')
                 if identifier is not None:
                     name = decode_normalize(identifier.text)
                     symbol = graph.new_symbol(ctx.parent, Category.VARIABLE, name, block)

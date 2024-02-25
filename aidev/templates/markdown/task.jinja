@@ -9,11 +9,15 @@
 
     - Branch: {{ task.branch }}
 
-    - Commit: {{ task.commit_hash }}
+    {% if task.commit_hash %}
+        - Commit: {{ task.commit_hash }}
+    {% endif %}
 
     - State: {{ task.state }}
 
-    - PR: {{ task.pr }}
+    {% if task.pr %}
+        - PR: {{ task.pr }}
+    {% endif %}
 
 </details>
 
@@ -30,6 +34,15 @@
         <summary>Error</summary>
         {% set error = task.error %}
         {% include 'error.jinja' with context %}
+    </details>
+{% endif %}
+
+
+{% if task.plan %}
+    <details open>
+        <summary>Plan</summary>
+        {% set text = task.plan %}
+        {% include 'text.jinja' with context %}
     </details>
 {% endif %}
 

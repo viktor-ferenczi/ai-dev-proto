@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from tree_sitter import Tree, TreeCursor
 
 from .tree_sitter_util import walk_nodes, find_first_node
-from .model import Graph, Symbol, Category, Block, Reference
+from .model import CodeMap, Symbol, Category, Block, Reference
 from .tree_sitter_parser import TreeSitterParser
 from ..common.util import decode_normalize
 
@@ -25,7 +25,7 @@ class CshtmlParser(TreeSitterParser):
     mime_types = ('text/x-cshtml',)
     tree_sitter_language_name = 'html'
 
-    def collect(self, graph: Graph, path: str, tree: Tree, file_line_count: int):
+    def collect(self, graph: CodeMap, path: str, tree: Tree, file_line_count: int):
         source = graph.new_source(path, file_line_count)
 
         ctx: Context = Context.new(source, -1)

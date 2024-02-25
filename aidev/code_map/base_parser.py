@@ -1,7 +1,7 @@
 from typing import Tuple
 
 import tree_sitter
-from .model import Graph
+from .model import CodeMap
 from ..common.config import C
 
 
@@ -20,5 +20,5 @@ class BaseParser:
         assert self.extensions
         assert self.mime_types
 
-    def parse(self, graph: Graph, path: str, content: bytes):
+    def parse(self, graph: CodeMap, path: str, content: bytes):
         raise NotImplementedError()

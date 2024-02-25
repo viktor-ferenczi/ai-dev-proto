@@ -29,13 +29,13 @@ class Category(SimpleEnum):
     """Using a namespace"""
 
     TYPE = 'TYPE'
-    """Type, type alias, interface, trait, class, struct, record"""
+    """Type, type alias, enum, interface, trait, class, struct, record"""
 
     FUNCTION = 'FUNCTION'
-    """Function (global, inner) or method (interface, trait, class, struct) declaration, including propery get/set"""
+    """Function or method declaration"""
 
     VARIABLE = 'VARIABLE'
-    """Variable (global, class, struct, member, local)"""
+    """Variable or property (global, class, struct, member, local)"""
 
 
 NAMESPACE_AWARE_CATEGORIES = (
@@ -145,7 +145,7 @@ class Symbol(BaseModel):
 NamespaceSymbolMap: TypeAlias = Dict[str, Dict[str, List[Symbol]]]
 
 
-class Graph(BaseModel):
+class CodeMap(BaseModel):
     """The code map is a directed graph of symbols and their relations
 
     The code map may contain cycles, should a circular dependency exists
@@ -156,11 +156,11 @@ class Graph(BaseModel):
     symbols: Dict[Identifier, Symbol]
 
     @classmethod
-    def new(cls) -> 'Graph':
+    def new(cls) -> 'CodeMap':
         return cls(symbols={})
 
-    def update(self, other: 'Graph'):
-        assert isinstance(other, Graph)
+    def update(self, other: 'CodeMap'):
+        assert isinstance(other, CodeMap)
 
         conflicts: Set[Identifier] = set(self.symbols) & set(other.symbols)
         if conflicts:

@@ -10,7 +10,7 @@ from .model import TaskState
 from ..common.async_helpers import AsyncPool
 from ..common.config import C
 from .working_copy import WorkingCopy
-from ..code_map.model import Graph, Category, Symbol
+from ..code_map.model import CodeMap, Category, Symbol
 from ..code_map.parsers import detect_parser
 from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines
 from ..editing.model import Patch, Block, Hunk, Document
@@ -36,7 +36,6 @@ class TaskProcessor:
             TaskState.PARSING: self.do_parsing,
             TaskState.PLANNING: self.do_planning,
             TaskState.CODING: self.do_coding,
-            TaskState.TESTING: self.do_testing,
         }
 
     async def run(self):
@@ -146,7 +145,7 @@ class TaskProcessor:
         task = self.task
         wc = self.wc
 
-        graph = Graph.new()
+        code_map = CodeMap.new()
 
         assert isinstance(wc, WorkingCopy)
         for path in task.paths:
@@ -156,11 +155,11 @@ class TaskProcessor:
                 continue
             parser = parser_cls()
             content = read_binary_file(full_path)
-            parser.parse(graph, path, content)
+            parser.parse(code_map, path, content)
 
-        graph.cross_reference()
+        code_map.cross_reference()
 
-        task.code_map = graph
+        task.code_map = code_map
 
     async def find_relevant_sources(self):
         wc = self.wc
@@ -293,6 +292,7 @@ class TaskProcessor:
 
     async def do_coding(self):
         task = self.task
+        wc = self.wc
 
         if not task.relevant_paths or not task.relevant_hunks:
             task.state = TaskState.FAILED
@@ -317,16 +317,34 @@ class TaskProcessor:
             task.error = f'Failed to implement the task'
             return
 
+        error = 'No implementations'
         for i, completion in enumerate(gen.completions):
-            print(f'Trying to apply change from completion {i}')
+            print(f'Trying to apply the changes from completion {i}')
             error = await self.apply_code_changes(completion)
-            if not task.is_wip:
-                return
-            if not error:
-                break
-            self.wc.roll_back_changes('.')
+            if error:
+                print(f'Failed to apply changes from completion {i}: {error}')
+                wc.roll_back_changes('.')
+                continue
 
-        task.state = TaskState.TESTING
+            print(f'Trying to build and test the changes from completion {i}')
+            error = await self.build_and_test()
+            if error:
+                print(f'Failed to build and test changes from completion {i}: {error}')
+                wc.roll_back_changes('.')
+                continue
+
+            print(f'Implementation {i} succeeded')
+            break
+        else:
+            print(f'All implementations failed')
+            task.state = TaskState.FAILED
+            task.error = error
+            return
+
+        wc.stage_change(wc.latest_path)
+        wc.commit(task.id)
+
+        task.state = TaskState.REVIEW
 
     async def apply_code_changes(self, completion: str) -> str:
         task = self.task
@@ -432,7 +450,7 @@ class TaskProcessor:
 
         write_text_file(os.path.join(self.wc.project_dir, document.path), modified_code)
 
-    async def do_testing(self):
+    async def build_and_test(self) -> str:
         task = self.task
         wc = self.wc
 
@@ -441,29 +459,19 @@ class TaskProcessor:
         wc.format_code()
 
         if not wc.has_changes():
-            task.state = TaskState.FAILED
-            task.error = f'No changes made during the implementation'
-            return
+            return f'No changes made during the implementation'
 
         error = wc.build()
         if error:
             await self.provide_feedback(task, 'build', error)
-            task.state = TaskState.FAILED
-            task.error = f'Failed to build solutions:\n\n{error}'
-            return
+            return f'Failed to build solutions:\n\n{error}'
 
         error = wc.test()
         if error:
             await self.provide_feedback(task, 'test', error)
-            task.state = TaskState.FAILED
-            task.error = f'Failed to test solutions:\n\n{error}'
-            return
+            return f'Failed to test solutions:\n\n{error}'
 
-        task.state = TaskState.REVIEW
-        self.dump_task()
-
-        wc.stage_change(wc.latest_path)
-        wc.commit(task.id)
+        return ''
 
     async def provide_feedback(self, task: Task, critic: str, error: str):
         template_name = f'feedback_{critic}_error'

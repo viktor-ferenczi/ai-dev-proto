@@ -677,3 +677,64 @@ DEFAULT_CSHTML = '''\
         <a class="dropdown-item" asp-action="Logout" asp-controller="Account">Log out <i class="fas fa-sign-out-alt"></i></a>
     </div>
 </div>'''
+
+ORDER_BY_CS = '''\
+namespace Shop.Data.Enums
+{
+    public enum OrderBy
+    {
+        None,
+        PriceAsc,
+        PriceDesc,
+        DateAsc,
+        DateDesc
+    }
+}
+'''
+
+CATEGORY_INDEX_MODEL_CS = '''\
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Shop.Web.Models.Category
+{
+    public class CategoryIndexModel
+    {
+        public IEnumerable<CategoryListingModel> CategoryList { get; set; }
+    }
+}
+'''
+
+IORDER_CS = '''\
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Shop.Data.Enums;
+using Shop.Data.Models;
+
+namespace Shop.Data
+{
+    public interface IOrder
+    {
+        void CreateOrder(Order order);
+        Order GetById(int orderId);
+        IEnumerable<Order> GetByUserId(string userId);
+        IEnumerable<Order> GetAll();
+        IEnumerable<Order> GetUserLatestOrders(int count, string userId);
+        IEnumerable<Food> GetUserMostPopularFoods(string id);
+        IEnumerable<Order> GetFilteredOrders(
+            string userId = null,
+            OrderBy orderBy = OrderBy.None,
+            int offset = 0,
+            int limit = 10,
+            decimal? minimalPrice = null,
+            decimal? maximalPrice = null,
+            DateTime? minDate = null,
+            DateTime? maxDate = null,
+            string zipCode = null
+            );
+    }
+}
+'''

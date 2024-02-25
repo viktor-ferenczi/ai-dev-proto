@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from ..code_map.model import Graph
+from ..code_map.model import CodeMap
 from ..common.config import C
 from ..common.util import SimpleEnum
 from ..editing.model import Hunk
@@ -111,7 +111,6 @@ class TaskState(SimpleEnum):
     PARSING = "PARSING"
     PLANNING = "PLANNING"
     CODING = "CODING"
-    TESTING = "TESTING"
     REVIEW = "REVIEW"
     MERGED = "MERGED"
     REJECTED = "REJECTED"
@@ -122,7 +121,6 @@ TASK_WIP_STATES = (
     TaskState.PARSING,
     TaskState.PLANNING,
     TaskState.CODING,
-    TaskState.TESTING,
 )
 
 TASK_START_STATE = TASK_WIP_STATES[0]
@@ -155,7 +153,7 @@ class Task(BaseModel):
     paths: Optional[List[str]] = None
     """Solution relative paths of all source files in the solution which may be considered when the task is started"""
 
-    code_map: Optional[Graph] = None
+    code_map: Optional[CodeMap] = None
     """Code map constructed from parsing all the source files when the task is started"""
 
     relevant_symbols: Optional[Set[str]] = None
