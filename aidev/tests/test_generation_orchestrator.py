@@ -50,7 +50,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
         orchestrator.register_engine(engine)
 
         async def complete_task_when_generated():
-            for _ in range(60):
+            for _ in range(300):
 
                 if any(g.state == GenerationState.FAILED for g in generations):
                     raise RuntimeError('One or more generations failed')
@@ -59,7 +59,7 @@ class GenerationOrchestratorTest(unittest.IsolatedAsyncioTestCase):
                     task.state = TaskState.REVIEW
                     break
 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
 
         await asyncio.wait([
             asyncio.create_task(orchestrator.run_until_complete()),

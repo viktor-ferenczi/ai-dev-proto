@@ -1,10 +1,11 @@
 import asyncio
 import os
+from asyncio import Event
 from traceback import format_exc
 from typing import Optional, Iterable, Dict
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..code_map.model import Graph
 from ..common.config import C
@@ -24,6 +25,7 @@ class GenerationState(SimpleEnum):
 
 class Generation(BaseModel):
     """Represents a single invocation of a Language Model (LLM), which may produce multiple completions (batch generation)"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     id: str
     """Unique ID of this generation"""
@@ -49,6 +51,9 @@ class Generation(BaseModel):
     error: Optional[str] = None
     """Error message in FAILED state"""
 
+    finish_event: Event = Field(exclude=True, default_factory=lambda: Event())
+    """Event triggered when the generation is finished"""
+
     @classmethod
     def new(cls, label: str, system: str, instruction: str, params: GenerationParams) -> 'Generation':
         return cls(
@@ -59,7 +64,6 @@ class Generation(BaseModel):
             instruction=instruction,
             params=params,
             completions=[],
-            error=None,
         )
 
     @property
@@ -86,11 +90,10 @@ class Generation(BaseModel):
         else:
             print(f'Finished generation: {self.label}')
             self.state = GenerationState.COMPLETED
+            self.finish_event.set()
 
     async def wait(self):
-        # FIXME: Replace with waiting on a state change async event
-        while not self.is_finished:
-            await asyncio.sleep(0.2)
+        await self.finish_event.wait()
 
 
 class SourceState(SimpleEnum):
