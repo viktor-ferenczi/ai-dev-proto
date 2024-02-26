@@ -83,6 +83,7 @@ class Config:
     PROMPT_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'prompt')
     WORKFLOW_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'workflow')
     MARKDOWN_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'markdown')
+    HTML_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'html')
 
     # Prompt templates for each model
     PROMPT_TEMPLATES = {

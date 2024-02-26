@@ -14,7 +14,6 @@ class SwiftParser(TreeSitterParser):
     extensions = ('swift',)
     mime_types = ('text/x-swift',)
     tree_sitter_language_name = 'swift'
-    debug = True
 
     categories = {
         'protocol': 'Protocols',

@@ -3,11 +3,12 @@ import asyncio
 import sys
 import os
 from logging import DEBUG
-from typing import Optional, List
+from typing import Optional, List, Set
 
 from aidev.code_map.parsers import init_tree_sitter
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
+from aidev.web import server
 from aidev.workflow.working_copy import WorkingCopy
 from aidev.editing.model import Document
 from aidev.engine.vllm_engine import VllmEngine
@@ -163,13 +164,35 @@ async def command_fix(project: WorkingCopy, branch: str, source: str):
 
     task_orchestrator = TaskOrchestrator(solution)
 
-    print('Working...')
-    await asyncio.wait([
+    web_server = server.main()
+    server.SOLUTION = solution
+
+    pending: Set[asyncio.Task] = {
         asyncio.create_task(generation_orchestrator.run_until_complete()),
         asyncio.create_task(task_orchestrator.run_until_complete()),
-    ])
+        asyncio.create_task(web_server),
+    }
 
-    print('Done')
+    print('Started:')
+    for task in pending:
+        print(f'{task.get_coro()}')
+
+    print('Working...')
+    try:
+        try:
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    print(f'Done: {task.get_coro()}')
+                    task.result()
+        except KeyboardInterrupt:
+            pass
+    finally:
+        server.SOLUTION = None
+        for task in pending:
+            task.cancel()
+
+    print('Quit')
 
 
 async def command_test(project: WorkingCopy, branch: str, keep: bool):  # , unit: bool, fixture: bool

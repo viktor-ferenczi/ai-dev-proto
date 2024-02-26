@@ -1,6 +1,10 @@
 import asyncio
 from asyncio import Future
-from typing import Any, Callable, AsyncIterable, Coroutine, Set, Iterable
+from datetime import datetime, timezone
+from typing import Any, Callable, AsyncIterable, Set, Iterable
+from typing import Coroutine
+
+import quart
 
 
 async def iter_async(iterable: Iterable[Any]) -> AsyncIterable[Any]:
@@ -80,3 +84,14 @@ class AsyncPool:
             await self.join()
         else:
             self.__cancel()
+
+
+async def run_app(app: quart.Quart, *coros: Coroutine, **kws):
+    print(f'{datetime.now(timezone.utc).isoformat()}: Service started')
+
+    tasks = [asyncio.create_task(coro) for coro in coros]
+
+    await app.run_task(**kws)
+
+    for task in tasks:
+        task.cancel()

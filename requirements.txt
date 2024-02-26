@@ -10,6 +10,11 @@ vllm-client
 jinja2
 tree-sitter
 python-magic-bin
+quart
+quart-cors
+aioquic
+aiodebug
+Werkzeug
 
 # Because of the tokenizers
 transformers

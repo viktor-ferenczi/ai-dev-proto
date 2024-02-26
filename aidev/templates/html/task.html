@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Details</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/xcode.min.css">
+</head>
+<body>
+<div class="container">
+    <h1>Task Details - {{ task.id }}</h1>
+    <div class="accordion" id="taskAccordion">
+        {% if task.description %}
+            <div class="card">
+                <div class="card-header" id="headingDescription">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseDescription" aria-expanded="true" aria-controls="collapseDescription">
+                            Description
+                        </button>
+                    </h2>
+                </div>
+                <div id="collapseDescription" class="collapse show" aria-labelledby="headingDescription" data-parent="#taskAccordion">
+                    <div class="card-body">
+                        <pre><code class="language-markdown">{{ task.description }}</code></pre>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if task.plan %}
+            <div class="card">
+                <div class="card-header" id="headingPlan">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapsePlan" aria-expanded="false" aria-controls="collapsePlan">
+                            Plan
+                        </button>
+                    </h2>
+                </div>
+                <div id="collapsePlan" class="collapse" aria-labelledby="headingPlan" data-parent="#taskAccordion">
+                    <div class="card-body">
+                        <pre><code class="language-markdown">{{ task.plan }}</code></pre>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if task.error %}
+            <div class="card">
+                <div class="card-header" id="headingError">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseError" aria-expanded="false" aria-controls="collapseError">
+                            Error
+                        </button>
+                    </h2>
+                </div>
+                <div id="collapseError" class="collapse" aria-labelledby="headingError" data-parent="#taskAccordion">
+                    <div class="card-body">
+                        <pre><code class="language-markdown">{{ task.error }}</code></pre>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if task.generations %}
+            <div class="card">
+                <div class="card-header" id="headingGenerations">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseGenerations" aria-expanded="false" aria-controls="collapseGenerations">
+                            Generations
+                        </button>
+                    </h2>
+                </div>
+                <div id="collapseGenerations" class="collapse" aria-labelledby="headingGenerations" data-parent="#taskAccordion">
+                    <div class="card-body">
+                        {% for generation in task.generations %}
+                            {% set loop_index = loop.index %}
+                            {% include 'generation.html' with context %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<div class="card">
+    <div class="accordion" id="generationAccordion-{{ generation.id }}">
+        <div class="card-header" id="headingGeneration-{{ generation.id }}">
+            <h2 class="mb-0">
+                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseGeneration-{{ generation.id }}" aria-expanded="false" aria-controls="collapseGeneration-{{ generation.id }}">
+                    {{ loop_index }}. {{ generation.label }}
+                </button>
+            </h2>
+        </div>
+        <div id="collapseGeneration-{{ generation.id }}" class="collapse" aria-labelledby="headingGeneration-{{ generation.id }}" data-parent="#generationAccordion-{{ generation.id }}">
+            <div class="card-body">
+                <h5>{{ generation.id }}</h5>
+                <div class="accordion" id="generationAccordion{{ generation.id }}">
+                    <div class="card">
+                        <div class="card-header" id="headingSystem{{ generation.id }}">
+                            <h2 class="mb-0">
+                                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseSystem{{ generation.id }}" aria-expanded="true" aria-controls="collapseSystem">
+                                    System
+                                </button>
+                            </h2>
+                        </div>
+
+                        <div id="collapseSystem{{ generation.id }}" class="collapse" aria-labelledby="headingSystem" data-parent="#generationAccordion{{ generation.id }}">
+                            <div class="card-body">
+                                <pre><code class="language-markdown">{{ generation.system }}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header" id="headingInstruction{{ generation.id }}">
+                            <h2 class="mb-0">
+                                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseInstruction{{ generation.id }}" aria-expanded="true" aria-controls="collapseInstruction">
+                                    Instruction
+                                </button>
+                            </h2>
+                        </div>
+
+                        <div id="collapseInstruction{{ generation.id }}" class="collapse" aria-labelledby="headingInstruction" data-parent="#generationAccordion{{ generation.id }}">
+                            <div class="card-body">
+                                <pre><code class="language-markdown">{{ generation.instruction }}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% for completion in generation.completions %}
+                        <div class="card">
+                            <div class="card-header" id="headingCompletion{{ loop.index }}">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseCompletion{{ loop.index }}" aria-expanded="true" aria-controls="collapseCompletion">
+                                        Completion {{ loop.index }}
+                                    </button>
+                                </h2>
+                            </div>
+
+                            <div id="collapseCompletion{{ loop.index }}" class="collapse" aria-labelledby="headingCompletion" data-parent="#generationAccordion{{ generation.id }}">
+                                <div class="card-body">
+                                    <pre><code class="language-markdown">{{ completion }}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

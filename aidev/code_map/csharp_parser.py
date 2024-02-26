@@ -24,7 +24,6 @@ class CSharpParser(TreeSitterParser):
     extensions = ('cs',)
     mime_types = ('text/x-csharp',)
     tree_sitter_language_name = 'c_sharp'
-    debug = True
 
     def collect(self, graph: CodeMap, path: str, tree: Tree, file_line_count: int):
         source = graph.new_source(path, file_line_count)
