@@ -1,6 +1,7 @@
 import json
 import os
 import traceback
+from enum import Enum
 from typing import Set, List
 
 from pydantic import BaseModel
@@ -17,9 +18,14 @@ from ..editing.model import Patch, Block, Hunk, Document
 from ..engine.params import GenerationParams, Constraint
 
 
+class ImplementationPlan(Enum):
+    ALPHA = 'ALPHA'
+    BETA = 'BETA'
+
+
 class ComparePlansResponse(BaseModel):
     reasoning: str
-    better_implementation_plan: str
+    better_implementation_plan: ImplementationPlan
 
 
 COMPARE_PLANS_RESPONSE_SCHEMA = ComparePlansResponse.model_json_schema()
@@ -262,13 +268,13 @@ class TaskProcessor:
         better_indices = []
         completion_indices = list(range(params.n))
         while len(completion_indices) > 1:
-            for i, j in zip(completion_indices[::2], completion_indices[1::2]):
+            for alpha_index, beta_index in zip(completion_indices[::2], completion_indices[1::2]):
                 instruction = render_workflow_template(
                     'compare_plans',
                     task=task,
                     schema=COMPARE_PLANS_RESPONSE_SCHEMA,
-                    implementation_plan_alpha=plan_gen.completions[i],
-                    implementation_plan_beta=plan_gen.completions[j],
+                    implementation_plan_alpha=plan_gen.completions[alpha_index],
+                    implementation_plan_beta=plan_gen.completions[beta_index],
                 )
                 constraint = Constraint.from_json_schema(COMPARE_PLANS_RESPONSE_SCHEMA)
                 params = GenerationParams(n=11, max_tokens=1000, temperature=0.5, constraint=constraint)
@@ -280,8 +286,11 @@ class TaskProcessor:
                     task.error = f'Plan comparison generation failed: {compare_gen.error}'
                     return
 
-                vote = sum(json.loads(response)['better_implementation_plan'] == 'ALPHA' for response in compare_gen.completions)
-                better_indices.append(i if vote >= params.n // 2 else j)
+                vote = sum(json.loads(response)['better_implementation_plan'] == ImplementationPlan.ALPHA for response in compare_gen.completions)
+                better_indices.append(alpha_index if vote >= params.n // 2 else beta_index)
+
+            if len(completion_indices) % 2:
+                better_indices.append(completion_indices[-1])
 
             completion_indices = better_indices
             better_indices = []
