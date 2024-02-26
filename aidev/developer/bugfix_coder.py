@@ -251,7 +251,7 @@ class BugfixCoder(BaseCoder):
                 print(f'Completed issue: {issue.key}')
                 return True
 
-            self.project.roll_back_changes(attempt.path)
+            self.project.reset(attempt.path)
 
         print(f'Failed to solve issue: {issue.key}')
         return False

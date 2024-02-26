@@ -17,7 +17,7 @@ class WorkingCopy:
         self.aidev_dir: str = os.path.join(self.project_dir, ".aidev")
         self.tasks_dir: str = os.path.join(self.aidev_dir, "tasks")
         self.audit_dir: str = os.path.join(self.aidev_dir, "audit")
-        self.latest_path: str = os.path.join(self.aidev_dir, "latest.md")
+        self.latest_audit_html_path: str = os.path.join(self.aidev_dir, "latest.html")
 
         self.tests_project_dir = os.path.join(project_dir, f'{project_name}.Tests')
         self.tests_project_path = os.path.join(self.tests_project_dir, f'{project_name}.Tests.csproj')
@@ -37,7 +37,7 @@ class WorkingCopy:
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        self.roll_back_changes('.')
+        self.rollback()
         self.lock.release()
 
     def load_config(self):
@@ -95,12 +95,17 @@ class WorkingCopy:
 
         self.must_run_command('checkout HEAD', ["git", "checkout", "HEAD"])
 
-    def roll_back_changes(self, path: str):
+    def reset(self):
         if not self.has_repository:
             return
 
-        self.must_run_command('reset staged changes', ["git", "reset", path])
-        self.must_run_command('roll back unstaged changes', ["git", "checkout", path])
+        self.must_run_command('reset staged changes', ["git", "reset", '.'])
+
+    def checkout(self):
+        if not self.has_repository:
+            return
+
+        self.must_run_command('roll back unstaged changes', ["git", "checkout", '.'])
 
     def commit(self, message: str):
         if not self.has_repository:
@@ -139,6 +144,18 @@ class WorkingCopy:
         # Returned paths are using slash (/) directory separators
         return {line.strip() for line in output.split('\n') if line.strip()}
 
+    def list_unversioned_paths(self) -> Optional[Set[str]]:
+        if not self.has_repository:
+            return None
+
+        returncode, output = self.run_command('list unversioned files', ['git', 'ls-files', '--others', '--exclude-standard'])
+
+        if returncode:
+            return None
+
+        # Returned paths are using slash (/) directory separators
+        return {line.strip() for line in output.split('\n') if line.strip()}
+
     def format_code(self):
         self.must_run_command(f'format code', ["dotnet", "format", '.'])
 
@@ -163,3 +180,12 @@ class WorkingCopy:
             if path.endswith(f'{os.path.sep}{filename}'):
                 return path
         return ''
+
+    def rollback(self):
+        self.reset()
+        self.delete_unversioned_files()
+        self.checkout()
+
+    def delete_unversioned_files(self):
+        for path in self.list_unversioned_paths():
+            os.remove(os.path.join(self.project_dir, path))

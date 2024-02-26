@@ -13,7 +13,7 @@ from ..common.config import C
 from .working_copy import WorkingCopy
 from ..code_map.model import CodeMap, Category, Symbol
 from ..code_map.parsers import detect_parser
-from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, render_markdown_template, read_binary_file, iter_code_blocks, join_lines
+from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, read_binary_file, iter_code_blocks, join_lines, render_html_template
 from ..editing.model import Patch, Block, Hunk, Document
 from ..engine.params import GenerationParams, Constraint
 
@@ -47,7 +47,7 @@ class TaskProcessor:
     async def run(self):
         async with self.wc:
             self.wc.ensure_branch(self.task.branch)
-            self.wc.roll_back_changes('.')
+            self.wc.rollback()
             await self.drive_through_states()
 
     async def drive_through_states(self):
@@ -84,12 +84,12 @@ class TaskProcessor:
         json_path = os.path.join(self.wc.tasks_dir, f'{task.id}.json')
         write_text_file(json_path, task.model_dump_json(indent=2))
 
-        task_md = render_markdown_template('task', task=task)
-        audit_path = os.path.join(self.wc.audit_dir, f'{task.id}.md')
-        write_text_file(audit_path, task_md)
+        task_html = render_html_template('task', task=task)
+        audit_path = os.path.join(self.wc.audit_dir, f'{task.id}.html')
+        write_text_file(audit_path, task_html)
 
         if task.state == TaskState.REVIEW:
-            write_text_file(self.wc.latest_path, task_md)
+            write_text_file(self.wc.latest_audit_html_path, task_html)
 
     async def do_parsing(self):
         task = self.task
@@ -332,14 +332,14 @@ class TaskProcessor:
             error = await self.apply_code_changes(completion)
             if error:
                 print(f'Failed to apply changes from completion {i}: {error}')
-                wc.roll_back_changes('.')
+                wc.rollback()
                 continue
 
             print(f'Trying to build and test the changes from completion {i}')
             error = await self.build_and_test()
             if error:
                 print(f'Failed to build and test changes from completion {i}: {error}')
-                wc.roll_back_changes('.')
+                wc.rollback()
                 continue
 
             print(f'Implementation {i} succeeded')
@@ -350,7 +350,7 @@ class TaskProcessor:
             task.error = error
             return
 
-        wc.stage_change(wc.latest_path)
+        wc.stage_change(wc.latest_audit_html_path)
         wc.commit(task.id)
 
         task.state = TaskState.REVIEW
