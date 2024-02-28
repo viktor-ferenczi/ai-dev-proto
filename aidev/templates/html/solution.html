@@ -1,18 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solution: {{ solution.name }}</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/xcode.min.css">
-</head>
+{% set page_title = 'Solution' %}
+{% include 'head.html' with context %}
 <body>
 <div class="container">
-    <h1 class="mt-5">Solution Details</h1>
+    <h1 class="mt-5">Solution: {{ solution.name }}</h1>
     <div class="mt-3">
-        <h2>Name: {{ solution.name }}</h2>
-        <p>Folder: {{ solution.folder }}</p>
+        Working copy folder: <span class="code">{{ solution.folder }}</span>
     </div>
     <div class="mt-4">
         <h3>Tasks</h3>
@@ -41,10 +35,6 @@
         {% endif %}
     </div>
 </div>
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
-<script>hljs.highlightAll();</script>
+{% include 'scripts.html' with context %}
 </body>
 </html>

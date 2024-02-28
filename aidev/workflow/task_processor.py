@@ -483,14 +483,16 @@ class TaskProcessor:
         return ''
 
     async def provide_feedback(self, task: Task, critic: str, error: str):
+        cleaned_error = join_lines(line for line in error.splitlines() if 'sonarqube' not in line.lower())
+
         template_name = f'feedback_{critic}_error'
         instruction = render_workflow_template(
             template_name,
             task=task,
-            error=replace_tripple_backquote(error),
+            error=replace_tripple_backquote(cleaned_error),
         )
 
-        params = GenerationParams(max_tokens=500, temperature=0.2)
+        params = GenerationParams(max_tokens=500, temperature=0.3)
         gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
 
         task.generations.append(gen)

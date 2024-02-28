@@ -25,6 +25,7 @@
     - MAKE SURE to add the using statements to import the necessary namespaces at the top of any newly created source files.
     - DEFINE the appropriate namespace in newly created C# source files, so any newly written code lands in the right namespace.
     - MAKE SURE to get the namespaces right, so any newly added code is accessible where you want to use them.
+    - ALWAYS INCLUDE the using statements required to import all library and project namespaces the code is using in the given source file.
     - Do NOT repeat the same source file.
 
     Respond only the code blocks you need to make changes to. Preserve the marker before each of the code blocks.
@@ -39,14 +40,16 @@
     If you skip a source file it will remain unmodified.
 
     You can modify or delete these existing files (paths):
-
     {% for path in task.relevant_paths %}
         - `{{ path }}`
-    {% endfor %}
+    {%- endfor %}
 
     To create a new source file just state its Path: and provide the code block with its contents.
     Introduce new source files only if really needed. For new files use the same file naming convention
-    as the other source files of the .NET Core Web server project are using.
+    as the other source files of the .NET Core Web server project are using. Make sure to ADD all the
+    necessary using statements at the top of any newly added C# source files.
+
+    MAKE SURE TO PUT ANY NEWLY ADDED CODE INTO THE RIGHT PROJECT NAMESPACE FOR ITS PURPOSE.
 
     Write each modified or new file only once, then finish your response.
 
