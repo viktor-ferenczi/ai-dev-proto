@@ -217,6 +217,7 @@ class TaskProcessor:
 
         relevant_hunks: List[Hunk] = []
         for source in relevant_sources:
+            document = Document.from_file(wc.project_dir, source.name)
 
             relevant_blocks: List[Block] = []
             for symbol, depth in code_map.walk_children(source):
@@ -224,6 +225,31 @@ class TaskProcessor:
                     relevant_blocks.append(symbol.block)
 
             assert relevant_blocks, f'No relevant blocks found in source: {source.name}'
+
+            # Add using statements, the LLM must know these
+            for using in code_map.iter_children_of_category(source, Category.USING):
+                relevant_blocks.append(using.block)
+
+            # Add the top level namespace, the LLM must know these
+            for namespace in code_map.iter_children_of_category(source, Category.NAMESPACE):
+                block = namespace.block
+                if block.end - block.begin < 2:
+                    continue
+
+                for i in range(namespace.block.begin, namespace.block.end):
+                    if '{' in document.lines[i]:
+                        break
+                else:
+                    continue
+
+                for j in range(namespace.block.end - 1, namespace.block.begin, -1):
+                    if '}' in document.lines[j]:
+                        break
+                else:
+                    continue
+
+                relevant_blocks.append(Block.from_range(namespace.block.begin, i + 1))
+                relevant_blocks.append(Block.from_range(j, namespace.block.end))
 
             relevant_blocks.sort(key=lambda b: b.begin)
 
@@ -237,7 +263,6 @@ class TaskProcessor:
                     continue
                 merged_blocks.append(Block.from_range(b.begin, b.end))
 
-            document = Document.from_file(wc.project_dir, source.name)
             hunks = [Hunk.from_document(document, b) for b in merged_blocks]
             patch = Patch.from_hunks(document, hunks)
             patch.merge_hunks()
