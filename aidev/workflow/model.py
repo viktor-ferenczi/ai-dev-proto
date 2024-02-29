@@ -60,7 +60,7 @@ class Generation(BaseModel):
             label=label,
             state=GenerationState.PENDING,
             system=system,
-            instruction=instruction,
+            instruction=instruction.rstrip(),
             params=params,
             completions=[],
         )

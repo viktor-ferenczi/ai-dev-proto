@@ -8,7 +8,13 @@
     which is supposed to implement the TASK described by the TASK-DESCRIPTION.
 
     An IMPLEMENTATION-PLAN was supposed to be followed during the code change.
-    The ORIGINAL-SOURCE-CODE has also been provided for your reference.
+
+    The ORIGINAL-SOURCE-CODE may also be provided for your reference if available.
+
+    {% if related_hunks %}
+        Some RELATED-SOURCE-CODE may also be provided for your reference if available.
+    {% endif %}
+
     Do NOT revert the change to resolve the build or test error.
     You MUST preserve the intended change to functionality.
 
@@ -39,6 +45,20 @@
     {{ task.plan }}
 
 </IMPLEMENTATION-PLAN>
+
+{% if related_hunks %}
+    <RELATED-SOURCE-CODE>
+
+        {% for hunk in related_hunks %}
+
+            {% set path = related_paths[loop.index0] %}
+            {% set code_block = hunk.code_block %}
+            {% include 'code_block.jinja' with context %}
+
+        {% endfor %}
+
+    </RELATED-SOURCE-CODE>
+{% endif %}
 
 <ORIGINAL-SOURCE-CODE>
 

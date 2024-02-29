@@ -1,8 +1,9 @@
 import json
 import os
+import shutil
 import traceback
 from enum import Enum
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Iterator, Iterable
 
 from pydantic import BaseModel
 
@@ -82,11 +83,15 @@ class TaskProcessor:
         task = self.task
 
         json_path = os.path.join(self.wc.tasks_dir, f'{task.id}.json')
-        write_text_file(json_path, task.model_dump_json(indent=2))
+        json_path_new = f'{json_path}.new'
+        write_text_file(json_path_new, task.model_dump_json(indent=2))
+        shutil.move(json_path_new, json_path)
 
         task_html = render_html_template('task', task=task)
         audit_path = os.path.join(self.wc.audit_dir, f'{task.id}.html')
-        write_text_file(audit_path, task_html)
+        audit_path_new = f'{audit_path}.new'
+        write_text_file(audit_path_new, task_html)
+        shutil.move(audit_path_new, audit_path)
 
         if task.state == TaskState.REVIEW:
             write_text_file(self.wc.latest_audit_html_path, task_html)
@@ -110,6 +115,13 @@ class TaskProcessor:
         await self.build_code_map()
         if task.state == TaskState.FAILED:
             return
+
+        # FIXME: It is a bit heavy
+        #        It should only store documents before changing files,
+        #        otherwise generate them from disk files on demand.
+        self.original_sources: Dict[str, Document] = {}
+        for relpath in task.paths:
+            self.original_sources[relpath] = Document.from_file(self.wc.project_dir, relpath)
 
         await self.find_relevant_sources()
         if task.state == TaskState.FAILED:
@@ -199,17 +211,23 @@ class TaskProcessor:
         names: Set[str] = set(json.loads(completion)['symbols'])
         relevant_symbols = {symbol for symbol in code_map.symbols.values() if symbol.name in names}
 
-        related_symbols: Set[Symbol] = set()
-        for symbol in relevant_symbols:
-            related_symbols.update(code_map.iter(symbol.dependencies))
-            related_symbols.update(code_map.iter(symbol.dependents))
-
+        related_symbols: Set[Symbol] = set(code_map.iter_related_symbols(relevant_symbols))
         relevant_symbols.update(related_symbols)
 
-        if not related_symbols:
+        if not relevant_symbols:
             task.state = TaskState.FAILED
             task.error = f'Could not narrow down the relevant part of the code to work on based on the task description'
             return
+
+        relevant_sources, relevant_hunks, relevant_symbol_ids = self.find_relevant_original_code(relevant_symbols)
+
+        task.relevant_symbols = relevant_symbol_ids
+        task.relevant_paths = [source.name for source in relevant_sources]
+        task.relevant_hunks = relevant_hunks
+
+    def find_relevant_original_code(self, relevant_symbols):
+        task = self.task
+        code_map = task.code_map
 
         relevant_symbol_ids = {symbol.id for symbol in relevant_symbols}
         relevant_source_set = {code_map.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols}
@@ -217,7 +235,7 @@ class TaskProcessor:
 
         relevant_hunks: List[Hunk] = []
         for source in relevant_sources:
-            document = Document.from_file(wc.project_dir, source.name)
+            document = self.original_sources[source.name]
 
             relevant_blocks: List[Block] = []
             for symbol, depth in code_map.walk_children(source):
@@ -242,7 +260,7 @@ class TaskProcessor:
                 else:
                     continue
 
-                for j in range(namespace.block.end - 1, namespace.block.begin, -1):
+                for j in range(namespace.block.end - 1, i - 1, -1):
                     if '}' in document.lines[j]:
                         break
                 else:
@@ -269,9 +287,7 @@ class TaskProcessor:
             hunk = patch.hunks[0]
             relevant_hunks.append(hunk)
 
-        task.relevant_symbols = relevant_symbol_ids
-        task.relevant_paths = [source.name for source in relevant_sources]
-        task.relevant_hunks = relevant_hunks
+        return relevant_sources, relevant_hunks, relevant_symbol_ids
 
     async def do_planning(self):
         task = self.task
@@ -351,10 +367,6 @@ class TaskProcessor:
             task.error = f'Failed to implement the task'
             return
 
-        self.original_sources: Dict[str, Document] = {}
-        for relpath in task.relevant_paths:
-            self.original_sources[relpath] = Document.from_file(wc.project_dir, relpath)
-
         error = 'No implementations'
         for i, completion in enumerate(gen.completions):
             print(f'Trying to apply the changes from completion {i}')
@@ -371,7 +383,7 @@ class TaskProcessor:
                 break
 
             error = 'No build attempts'
-            for attempt in range(3 + len(self.original_sources)):
+            for attempt in range(3 + len(task.relevant_paths)):
 
                 print(f'Failed to build and test changes from completion {i}: {error}')
                 print('Attemting to fix the code based on the feedback')
@@ -387,7 +399,6 @@ class TaskProcessor:
                 print(f'Trying to build and test the changes from completion {i} fix attempt {1 + attempt}')
                 error = await self.build_and_test()
                 if not error:
-                    print(f'Implementation {i} succeeded')
                     break
 
             if not error:
@@ -454,7 +465,7 @@ class TaskProcessor:
                 if code.strip():
                     if exists:
                         print(f'Modify: {path}')
-                        document = Document.from_file(self.wc.project_dir, path)
+                        document = self.original_sources[path]
                         if len(pool) >= 16:
                             await pool.wait()
                         pool.run(self.reintegrate_code_change(document, code))
@@ -567,6 +578,7 @@ class TaskProcessor:
     async def attempt_to_fix_the_code(self, relpath: str):
         task = self.task
         wc = self.wc
+        code_map = task.code_map
 
         if not task.generations:
             return
@@ -587,6 +599,11 @@ class TaskProcessor:
         original_source = self.original_sources.get(relpath)
         modified_source = Document.from_file(wc.project_dir, relpath)
 
+        iter_relevant_symbols = code_map.iter(task.relevant_symbols)
+        related_symbols = {symbol for symbol in iter_relevant_symbols if symbol.name in feedback}
+        related_sources, related_hunks, related_symbol_ids = self.find_relevant_original_code(related_symbols)
+        related_paths = [source.name for source in related_sources]
+
         template_name = f'fix_build_or_test_error'
         instruction = render_workflow_template(
             template_name,
@@ -595,6 +612,8 @@ class TaskProcessor:
             path=relpath,
             original_source_code=original_source.code_block if original_source else '',
             modified_source_code=modified_source.code_block,
+            related_paths=related_paths,
+            related_hunks=related_hunks,
         )
 
         params = GenerationParams(n=16, max_tokens=4000, use_beam_search=True)

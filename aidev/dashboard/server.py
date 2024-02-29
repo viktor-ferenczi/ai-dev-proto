@@ -47,6 +47,12 @@ async def get_task(task_id: str):
     return Response(response=response, status=200)
 
 
+@app.get("/test/")
+async def get_test():
+    response = await render_template("test.html", code='```cs\nclass Class<T> {}\n```')
+    return Response(response=response, status=200)
+
+
 async def main():
     await run_app(app, debug=C.VERBOSE, host="localhost", port=8000)
 

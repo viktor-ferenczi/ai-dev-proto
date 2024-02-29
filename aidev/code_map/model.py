@@ -268,6 +268,11 @@ class CodeMap(BaseModel):
             if dependency.dependents:
                 yield from self.walk_dependants(dependency, depth, visited)
 
+    def iter_related_symbols(self, symbols: Iterable[Symbol]) -> Iterable[Symbol]:
+        for symbol in symbols:
+            yield from self.iter(symbol.dependencies)
+            yield from self.iter(symbol.dependents)
+
     def cross_reference(self):
         self.__remove_external_references()
         namespace_symbol_map: NamespaceSymbolMap = self.__map_symbols_to_namespaces()
