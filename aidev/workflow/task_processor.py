@@ -370,16 +370,29 @@ class TaskProcessor:
                 print(f'Implementation {i} succeeded')
                 break
 
-            print(f'Failed to build and test changes from completion {i}: {error}')
-            print('Attemting to fix the code based on the feedback')
-            staged_paths = wc.list_staged_paths()
-            for path in staged_paths:
-                error = await self.attempt_to_fix_the_code(path)
-                if not error:
-                    error = await self.build_and_test()
+            error = 'No build attempts'
+            for attempt in range(3 + len(self.original_sources)):
+
+                print(f'Failed to build and test changes from completion {i}: {error}')
+                print('Attemting to fix the code based on the feedback')
+                staged_paths = wc.list_staged_paths()
+                for path in staged_paths:
+                    error = await self.attempt_to_fix_the_code(path)
+                    if not error:
+                        error = await self.build_and_test()
+                    if not error:
+                        print(f'Implementation {i} succeeded')
+                        break
+
+                print(f'Trying to build and test the changes from completion {i} fix attempt {1 + attempt}')
+                error = await self.build_and_test()
                 if not error:
                     print(f'Implementation {i} succeeded')
                     break
+
+            if not error:
+                print(f'Implementation {i} succeeded')
+                break
 
             print(f'Failed to build and test changes from completion {i}: {error}')
             wc.rollback()
