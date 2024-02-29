@@ -8,7 +8,7 @@ from typing import Optional, List, Set
 from aidev.code_map.parsers import init_tree_sitter
 from aidev.common.config import C
 from aidev.common.util import set_slow_callback_duration_threshold, join_lines, init_logger
-from aidev.web import server
+from aidev.dashboard import server
 from aidev.workflow.working_copy import WorkingCopy
 from aidev.editing.model import Document
 from aidev.engine.vllm_engine import VllmEngine

@@ -44,15 +44,15 @@
 
                     {% for completion in generation.completions %}
                         <div class="card">
-                            <div class="card-header" id="headingCompletion{{ loop.index }}">
+                            <div class="card-header" id="headingCompletion-{{ generation.id }}-{{ loop.index }}">
                                 <h2 class="mb-0">
-                                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseCompletion{{ loop.index }}" aria-expanded="true" aria-controls="collapseCompletion">
+                                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseCompletion-{{ generation.id }}-{{ loop.index }}" aria-expanded="true" aria-controls="collapseCompletion">
                                         Completion {{ loop.index }}
                                     </button>
                                 </h2>
                             </div>
 
-                            <div id="collapseCompletion{{ loop.index }}" class="collapse" aria-labelledby="headingCompletion" data-parent="#generationAccordion{{ generation.id }}">
+                            <div id="collapseCompletion-{{ generation.id }}-{{ loop.index }}" class="collapse" aria-labelledby="headingCompletion-{{ generation.id }}-{{ loop.index }}" data-parent="#generationAccordion{{ generation.id }}">
                                 <div class="card-body">
                                     <pre><code class="language-markdown">{{ completion }}</code></pre>
                                 </div>

@@ -198,13 +198,14 @@ def init_logger(loglevel=INFO) -> Logger:
     return logger
 
 
-def render_template(_path: str, variables: dict) -> str:
+def render_template(_path: str, variables: dict, **environment) -> str:
     if not os.path.exists(_path):
         raise FileNotFoundError(f"The file {_path} does not exist.")
 
     env = Environment(
         loader=FileSystemLoader(os.path.dirname(_path)),
         undefined=StrictUndefined,
+        **environment
     )
     template = env.get_template(os.path.basename(_path))
     return template.render(**variables)
@@ -217,7 +218,7 @@ def render_workflow_template(_name: str, **variables) -> str:
 
 def render_html_template(_name: str, **variables) -> str:
     path = os.path.join(C.HTML_TEMPLATES_DIR, f'{_name}.html')
-    return unindent_code_blocks(render_template(path, variables))
+    return unindent_code_blocks(render_template(path, variables, autoescape=True))
 
 
 def unindent_code_blocks(md: str) -> str:

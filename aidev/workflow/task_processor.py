@@ -2,7 +2,7 @@ import json
 import os
 import traceback
 from enum import Enum
-from typing import Set, List
+from typing import Set, List, Dict
 
 from pydantic import BaseModel
 
@@ -351,6 +351,10 @@ class TaskProcessor:
             task.error = f'Failed to implement the task'
             return
 
+        self.original_sources: Dict[str, Document] = {}
+        for relpath in task.relevant_paths:
+            self.original_sources[relpath] = Document.from_file(wc.project_dir, relpath)
+
         error = 'No implementations'
         for i, completion in enumerate(gen.completions):
             print(f'Trying to apply the changes from completion {i}')
@@ -362,13 +366,23 @@ class TaskProcessor:
 
             print(f'Trying to build and test the changes from completion {i}')
             error = await self.build_and_test()
-            if error:
-                print(f'Failed to build and test changes from completion {i}: {error}')
-                wc.rollback()
-                continue
+            if not error:
+                print(f'Implementation {i} succeeded')
+                break
 
-            print(f'Implementation {i} succeeded')
-            break
+            print(f'Failed to build and test changes from completion {i}: {error}')
+            print('Attemting to fix the code based on the feedback')
+            staged_paths = wc.list_staged_paths()
+            for path in staged_paths:
+                error = await self.attempt_to_fix_the_code(path)
+                if not error:
+                    error = await self.build_and_test()
+                if not error:
+                    print(f'Implementation {i} succeeded')
+                    break
+
+            print(f'Failed to build and test changes from completion {i}: {error}')
+            wc.rollback()
         else:
             print(f'All implementations failed')
             task.state = TaskState.FAILED
@@ -537,10 +551,54 @@ class TaskProcessor:
             task.error = f'Failed to generate feedback, all completions are empty.'
             return
 
-        # task.feedback = Feedback(
-        #     critic=critic,
-        #     criticism=completion,
-        # )
+    async def attempt_to_fix_the_code(self, relpath: str):
+        task = self.task
+        wc = self.wc
 
-        # Do NOT append the feedback to task.feedbacks here,
-        # that will happen on cloning the task for a retry
+        if not task.generations:
+            return
+
+        feedback_generation = task.generations[-1]
+        if feedback_generation.label not in ('feedback_build_error', 'feedback_test_error'):
+            return
+
+        feedback = feedback_generation.completions[0]
+
+        if os.path.basename(relpath) not in feedback:
+            return
+
+        path = os.path.join(wc.project_dir, relpath)
+        if not os.path.isfile(path):
+            return
+
+        original_source = self.original_sources.get(relpath)
+        modified_source = Document.from_file(wc.project_dir, relpath)
+
+        template_name = f'fix_build_or_test_error'
+        instruction = render_workflow_template(
+            template_name,
+            task=task,
+            feedback=feedback,
+            path=relpath,
+            original_source_code=original_source.code_block if original_source else '',
+            modified_source_code=modified_source.code_block,
+        )
+
+        params = GenerationParams(n=16, max_tokens=4000, use_beam_search=True)
+        gen = Generation.new(template_name, C.SYSTEM_CODING_ASSISTANT, instruction, params)
+
+        task.generations.append(gen)
+        await gen.wait()
+
+        if gen.state == GenerationState.FAILED:
+            task.state = TaskState.FAILED
+            task.error = f'Failed to generate code fix:\n\n{gen.error}'
+            return
+
+        for completion in gen.completions:
+            for fixed_code in extract_code_blocks(completion):
+                write_text_file(path, fixed_code)
+                return
+
+        task.state = TaskState.FAILED
+        task.error = f'Failed to generate feedback, all completions are empty.'

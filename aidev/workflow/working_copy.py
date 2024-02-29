@@ -133,6 +133,17 @@ class WorkingCopy:
         return_code, output = self.run_command('get commit hash', ['git', 'rev-parse', 'HEAD'])
         return '' if return_code else output
 
+    def list_staged_paths(self) -> Optional[Set[str]]:
+        if not self.has_repository:
+            return None
+
+        returncode, output = self.run_command('list ignored files', ['git', 'diff', '--cached', '--name-only'])
+        if returncode:
+            return None
+
+        # Returned paths are using slash (/) directory separators
+        return {line.strip() for line in output.split('\n') if line.strip()}
+
     def list_ignored_paths(self) -> Optional[Set[str]]:
         if not self.has_repository:
             return None

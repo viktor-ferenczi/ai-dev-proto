@@ -1,0 +1,67 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to change the SOURCE-CODE to resolve the BUILD-OR-TEST-ERROR provided.
+
+    The BUILD-OR-TEST-ERROR was caused by the MODIFIED-SOURCE-CODE,
+    which is supposed to implement the TASK described by the TASK-DESCRIPTION.
+
+    An IMPLEMENTATION-PLAN was supposed to be followed during the code change.
+    The ORIGINAL-SOURCE-CODE has also been provided for your reference.
+    Do NOT revert the change to resolve the build or test error.
+    You MUST preserve the intended change to functionality.
+
+    YOUR JOB IS TO FIX THE IMPLEMENTATION TO BUILD AND TEST SUCCESSFULLY.
+
+    Please ALWAYS honor ALL of these rules specific to your current job:
+
+    - ALWAYS write clean, human-readable code.
+    - Make ONLY necessary changes.
+    - Do NOT make any changes unrelated to the TASK or the BUILD-OR-TEST-ERROR.
+    - Do NOT remove any existing code or comments unrelated to the TASK or the BUILD-OR-TEST-ERROR.
+    - NEVER use placeholders, ALWAYS write out the full code.
+    - Do NOT repeat the same source file.
+    - IGNORE WARNINGS, concentrate only on the errors.
+
+    RESPOND WITH THE FIXED CODE IN A SINGLE CODE BLOCK AND NOTHING ELSE.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task.description }}
+
+</TASK-DESCRIPTION>
+
+<IMPLEMENTATION-PLAN>
+
+    {{ task.plan }}
+
+</IMPLEMENTATION-PLAN>
+
+<ORIGINAL-SOURCE-CODE>
+
+    {% if original_source_code %}
+        {% set code_block = original_source_code %}
+        {% include 'code_block.jinja' with context %}
+    {% else %}
+        There was no original source file, the modified source code is in a newly added file.
+    {% endif %}
+
+</ORIGINAL-SOURCE-CODE>
+
+<MODIFIED-SOURCE-CODE>
+
+    {% set code_block = modified_source_code %}
+    {% include 'code_block.jinja' with context %}
+
+</MODIFIED-SOURCE-CODE>
+
+<BUILD-OR-TEST-ERROR>
+
+    {{ feedback }}
+
+</BUILD-OR-TEST-ERROR>
+
+Take a deep breath and write your RESPONSE.
