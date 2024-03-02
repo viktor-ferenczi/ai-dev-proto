@@ -17,7 +17,7 @@ class Config:
 
     # LLM model name (valid values are the keys of Config._MODEL_NAMES)
     # It is used to select the right tokenizer, chat template, max context size and optimal parallel sequence count
-    MODEL: str = os.getenv('AIDEV_MODEL', 'deepseek-coder')
+    MODEL: str = os.getenv('AIDEV_MODEL', 'mixtral')
 
     # Engine selection: 'openai' or 'vllm'
     ENGINE: str = 'vllm'
@@ -60,6 +60,7 @@ class Config:
         'deepseek-coder': 'DeepSeek Coder',
         'deepseek-llm': 'DeepSeek LLM',
         'yi': 'Yi',
+        'mixtral': 'Mixtral',
     }
 
     # Maximum context size of models
@@ -68,14 +69,25 @@ class Config:
         'deepseek-coder': 16384,
         'deepseek-llm': 4096,
         'yi': 65536,
+        'mixtral': 32768,
     }
 
     # Optimal parallel sequence counts of models
     OPTIMAL_PARALLEL_SEQUENCES: Dict[str, int] = {
-        'codellama': 16,
-        'deepseek-coder': 16,
-        'deepseek-llm': 16,
-        'yi': 16,
+        'codellama': 15,
+        'deepseek-coder': 15,
+        'deepseek-llm': 15,
+        'yi': 15,
+        'mixtral': 15,
+    }
+
+    # Prompt templates for each model
+    PROMPT_TEMPLATES = {
+        'codellama': 'llama-2-chat',
+        'deepseek-coder': 'deepseek-coder',
+        'deepseek-llm': 'deepseek-llm',
+        'yi': 'orca',
+        'mixtral': 'mixtral',
     }
 
     # Directory with the Jinja2 prompt templates
@@ -84,14 +96,6 @@ class Config:
     WORKFLOW_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'workflow')
     MARKDOWN_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'markdown')
     HTML_TEMPLATES_DIR = os.path.join(TEMPLATES_DIR, 'html')
-
-    # Prompt templates for each model
-    PROMPT_TEMPLATES = {
-        'codellama': 'llama-2-chat',
-        'deepseek-coder': 'deepseek-coder',
-        'deepseek-llm': 'deepseek-llm',
-        'yi': 'orca',
-    }
 
     # Async
     SLOW_CALLBACK_DURATION_THRESHOLD = 1.0  # s

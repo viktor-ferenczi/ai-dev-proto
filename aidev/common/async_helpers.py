@@ -1,49 +1,38 @@
-import asyncio
-from asyncio import Future
+from asyncio import Future, Semaphore, create_task, as_completed, Event, wait, FIRST_COMPLETED
 from datetime import datetime, timezone
-from typing import Any, Callable, AsyncIterable, Set, Iterable
-from typing import Coroutine
+from typing import Set, Iterable, AsyncIterable, Callable, Coroutine
 
 import quart
 
 
-async def iter_async(iterable: Iterable[Any]) -> AsyncIterable[Any]:
+async def iter_async[T](iterable: Iterable[T]) -> AsyncIterable[T]:
     for v in iterable:
         yield v
 
 
-async def map_async(func: Callable[[Any], Coroutine], iter_args: AsyncIterable[Any], max_tasks: int = 0) -> AsyncIterable[Any]:
-    assert max_tasks > 0
+async def map_async_worker[R](semaphore: Semaphore, coro: Coroutine[None, None, R]) -> R:
+    async with semaphore:
+        return await coro
 
-    if max_tasks == 1:
-        async for arg in iter_args:
-            yield await func(arg)
-        return
 
-    pending: Set[Future] = set()
-    try:
-        async for arg in iter_args:
-            pending.add(asyncio.create_task(func(arg)))
-            if max_tasks > 0 and len(pending) >= max_tasks:
-                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                for task in done:
-                    yield task.result()
-                del done
-                del task
-
-        if pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
-            for task in done:
-                yield task.result()
-    finally:
-        for task in pending:
-            task.cancel()
+async def map_async[T, R](async_func: Callable[[T], Coroutine[None, None, R]], concurrency: int, async_iter_args: AsyncIterable[T]) -> AsyncIterable[R]:
+    if concurrency > 1:
+        semaphore = Semaphore(concurrency)
+        workers = [create_task(map_async_worker(semaphore, async_func(arg))) async for arg in async_iter_args]
+        for completed_worker in as_completed(workers):
+            yield await completed_worker
+    elif concurrency == 1:
+        async for arg in async_iter_args:
+            yield await async_func(arg)
+    else:
+        raise ValueError(f'Invalid concurrency (must be a positive integer): {concurrency!r}')
 
 
 class AsyncPool:
 
     def __init__(self):
         self.pending: Set[Future] = set()
+        self.__added = Event()
 
     def __len__(self) -> int:
         return len(self.pending)
@@ -52,8 +41,10 @@ class AsyncPool:
         return bool(self.pending)
 
     def run(self, coroutine: Coroutine):
-        task = asyncio.create_task(coroutine)
+        task = create_task(coroutine)
         self.pending.add(task)
+        self.__added.set()
+        self.__added.clear()
 
     async def join(self):
         try:
@@ -66,7 +57,7 @@ class AsyncPool:
         if not self.pending:
             return
 
-        done, self.pending = await asyncio.wait(self.pending, return_when=asyncio.FIRST_COMPLETED)
+        done, self.pending = await wait(self.pending, return_when=FIRST_COMPLETED)
         for task in done:
             task.result()
 
@@ -89,7 +80,7 @@ class AsyncPool:
 async def run_app(app: quart.Quart, *coros: Coroutine, **kws):
     print(f'{datetime.now(timezone.utc).isoformat()}: Service started')
 
-    tasks = [asyncio.create_task(coro) for coro in coros]
+    tasks = [create_task(coro) for coro in coros]
 
     await app.run_task(**kws)
 

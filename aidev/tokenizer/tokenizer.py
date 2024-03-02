@@ -37,4 +37,8 @@ def get_tokenizer(model: str) -> Tokenizer:
         from .yi_tokenizer import YiTokenizer
         return YiTokenizer()
 
+    if model == 'mixtral':
+        from .mixtral_tokenizer import MixtralTokenizer
+        return MixtralTokenizer()
+
     raise ValueError(f'Unknown model: {model}')

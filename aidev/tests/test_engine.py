@@ -221,17 +221,17 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
             instructions = questions
 
         started = time.perf_counter()
-        outputs = [completions[0] async for completions in map_async(generate, iter_async(instructions), max_tasks=self.engine.optimal_parallel_sequences)]
+        outputs = [completions async for completions in map_async(generate, self.engine.optimal_parallel_sequences, iter_async(instructions))]
         finished = time.perf_counter()
         duration = finished - started
 
         self.assertEqual(len(questions), len(outputs))
 
-        for output in outputs:
-            self.assertTrue(bool(output.strip()))
-
         usage = self.engine.usage
         print(f'Generated {usage.completion_tokens} tokens in {duration:.1f}s ({usage.completion_tokens / duration:.1f} tokens/s)')
+
+        for output in outputs:
+            self.assertTrue(bool(output.strip()))
 
         return outputs
 
