@@ -1,0 +1,69 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    The ORIGINAL-SOURCE-CODE below is part of a .NET Core C# solution.
+    The ORIGINAL-SOURCE-CODE was built successfully.
+
+    The MODIFIED-SOURCE-CODE is a modified version of the same code.
+    The code was modified while executing the IMPLEMENTATION-PLAN,
+    which is required to solve a TASK described in the TASK-DESCRIPTION.
+
+    The MODIFIED-SOURCE-CODE fails to build and results in a BUILD-ERROR.
+    Your job is to fix the MODIFIED-SOURCE-CODE to be buildable while trying
+    to preserve any functional changes made. Do NOT just revert to the original
+    source code. Attempt to fix the code properly by keeping the modifications
+    required to resolve the TASK according to the IMPLEMENTATION-PLAN.
+
+    Please ALWAYS honor ALL of these rules specific to your current job:
+
+    - ALWAYS write clean, human-readable code.
+    - Make ONLY changes absolutely necessary.
+    - Do NOT make any changes unrelated to the TASK or the BUILD-ERROR.
+    - Do NOT remove any existing code or comments unrelated to the IMPLEMENTATION-PLAN or the BUILD-ERROR.
+    - NEVER use placeholders, ALWAYS write out the full code.
+    - IGNORE WARNINGS, concentrate only on the errors.
+    - IGNORE ANYTHING RELATED TO SonarQube.
+    - Do NOT repeat the same source file.
+
+    RESPOND WITH THE FIXED CODE SEGMENTS IN THE SAME FORMAT AS THE MODIFIED-SOURCE-CODE.
+
+</INSTRUCTIONS>
+
+<TASK-DESCRIPTION>
+
+    {{ task_description }}
+
+</TASK-DESCRIPTION>
+
+<IMPLEMENTATION-PLAN>
+
+    {{ implementation_plan }}
+
+</IMPLEMENTATION-PLAN>
+
+<ORIGINAL-SOURCE-CODE>
+
+    {% for hunk in original_hunks %}
+
+        {% set path = hunk.document.path %}
+        {% set code_block = hunk.code_block %}
+        {% include 'code_block.jinja' with context %}
+
+    {% endfor %}
+
+</ORIGINAL-SOURCE-CODE>
+
+<MODIFIED-SOURCE-CODE>
+
+    {% for hunk in modified_hunks %}
+
+        {% set path = hunk.document.path %}
+        {% set code_block = hunk.code_block %}
+        {% include 'code_block.jinja' with context %}
+
+    {% endfor %}
+
+</MODIFIED-SOURCE-CODE>
+
+Take a deep breath and write your RESPONSE.

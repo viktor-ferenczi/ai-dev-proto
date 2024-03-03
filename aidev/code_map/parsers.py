@@ -118,6 +118,9 @@ def detect_mime(body: bytes) -> str:
 def detect_parser(path: str, mime_type: Optional[str] = None) -> Optional[Type[BaseParser]]:
     parser_cls = None
 
+    if not PARSERS_BY_EXTENSION:
+        raise RuntimeError('Call init_tree_sitter before using the parsers!')
+
     if '.' in path:
         extension = path.rsplit('.', 1)[-1].lower()
         parser_cls = PARSERS_BY_EXTENSION.get(extension)

@@ -4,7 +4,7 @@ from subprocess import check_output, Popen, STDOUT, PIPE
 from typing import Optional, Set, List
 
 from ..common.config import C
-from ..common.util import iter_tree
+from ..common.util import iter_tree, read_text_file, write_text_file
 
 
 class WorkingCopy:
@@ -62,9 +62,12 @@ class WorkingCopy:
             raise RuntimeError(error)
 
     def analyze(self):
-        self.must_run_command('begin analyzing project using SonarScanner', ['dotnet', 'sonarscanner', 'begin', f'/k:{self.project_name}', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
+        self.must_run_command('begin analyzing project using SonarScanner',
+                              ['dotnet', 'sonarscanner', 'begin', f'/k:{self.project_name}',
+                               f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
         self.must_run_command('building the project with analysis enabled', ['dotnet', 'build'], shell=True)
-        self.must_run_command('end analyzing project', ['dotnet', 'sonarscanner', 'end', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
+        self.must_run_command('end analyzing project',
+                              ['dotnet', 'sonarscanner', 'end', f'/d:sonar.token={C.SONAR_TOKEN}'], shell=True)
 
     def get_current_branch(self) -> str:
         if not self.has_repository:
@@ -133,6 +136,26 @@ class WorkingCopy:
         return_code, output = self.run_command('get commit hash', ['git', 'rev-parse', 'HEAD'])
         return '' if return_code else output
 
+    def get_full_path(self, relpath: str) -> str:
+        return os.path.join(self.project_dir, relpath)
+
+    def read_source(self, relpath: str) -> str:
+        return read_text_file(self.get_full_path(relpath))
+
+    def write_source(self, relpath: str, text: str) -> str:
+        return write_text_file(self.get_full_path(relpath), text)
+
+    def list_versioned_paths(self) -> Optional[Set[str]]:
+        if not self.has_repository:
+            return None
+
+        returncode, output = self.run_command('list versioned files', ['git', 'ls-files'])
+        if returncode:
+            return None
+
+        # Returned paths are using slash (/) directory separators
+        return {line.strip() for line in output.split('\n') if line.strip()}
+
     def list_staged_paths(self) -> Optional[Set[str]]:
         if not self.has_repository:
             return None
@@ -148,7 +171,8 @@ class WorkingCopy:
         if not self.has_repository:
             return None
 
-        returncode, output = self.run_command('list ignored files', ['git', 'ls-files', '--others', '--ignored', '--exclude-standard'])
+        returncode, output = self.run_command('list ignored files',
+                                              ['git', 'ls-files', '--others', '--ignored', '--exclude-standard'])
         if returncode:
             return None
 
@@ -159,7 +183,8 @@ class WorkingCopy:
         if not self.has_repository:
             return None
 
-        returncode, output = self.run_command('list unversioned files', ['git', 'ls-files', '--others', '--exclude-standard'])
+        returncode, output = self.run_command('list unversioned files',
+                                              ['git', 'ls-files', '--others', '--exclude-standard'])
 
         if returncode:
             return None
@@ -177,14 +202,17 @@ class WorkingCopy:
         return self.try_run_command('build solution', ['dotnet', 'build'])
 
     def test(self) -> str:
-        return self.try_run_command('test solution', ['dotnet', 'test', '--no-build', '--nologo', '--logger', 'console', '.'])
+        return self.try_run_command('test solution',
+                                    ['dotnet', 'test', '--no-build', '--nologo', '--logger', 'console', '.'])
 
     def test_coverage(self) -> str:
         coverage_path = os.path.join(self.project_dir, 'coverage.xml')
         if os.path.exists(coverage_path):
             os.remove(coverage_path)
 
-        return self.try_run_command('collect test coverage', ['dotnet-coverage', 'collect', '-f', 'cobertura', '-o', 'coverage.xml', 'dotnet', 'test'])
+        return self.try_run_command('collect test coverage',
+                                    ['dotnet-coverage', 'collect', '-f', 'cobertura', '-o', 'coverage.xml', 'dotnet',
+                                     'test'])
 
     def find(self, filename: str) -> str:
         for path in iter_tree(self.project_dir):

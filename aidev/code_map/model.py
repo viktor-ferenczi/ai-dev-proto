@@ -1,3 +1,5 @@
+import os
+import re
 from collections import defaultdict
 from hashlib import sha1
 from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set, Any, List
@@ -5,10 +7,13 @@ from typing import Optional, Dict, Iterable, Tuple, TypeAlias, Set, Any, List
 from pydantic import BaseModel
 
 from aidev.common.config import C
-from aidev.common.util import SimpleEnum
-from aidev.editing.model import Block
+from aidev.common.util import SimpleEnum, read_binary_file
+from aidev.editing.model import Block, Hunk, Patch, Document
+from aidev.workflow.working_copy import WorkingCopy
 
 Identifier: TypeAlias = str
+
+RX_NAMES = re.compile(r'[a-z_][a-z_0-9]*', re.I)
 
 
 class Category(SimpleEnum):
@@ -154,10 +159,29 @@ class CodeMap(BaseModel):
 
     """
     symbols: Dict[Identifier, Symbol]
+    original_sources: Dict[str, Document]
 
     @classmethod
     def new(cls) -> 'CodeMap':
-        return cls(symbols={})
+        return cls(symbols={}, original_sources={})
+
+    @classmethod
+    def from_working_copy(cls, wc: WorkingCopy, paths: Set[str]) -> 'CodeMap':
+        from aidev.code_map.parsers import detect_parser
+
+        code_map = cls.new()
+        for path in paths:
+            full_path = os.path.join(wc.project_dir, path)
+            parser_cls = detect_parser(full_path)
+            if parser_cls is None:
+                continue
+            parser = parser_cls()
+            content = read_binary_file(full_path)
+            parser.parse(code_map, path, content)
+            code_map.original_sources[path] = Document.from_file(wc.project_dir, path)
+
+        code_map.cross_reference()
+        return code_map
 
     def update(self, other: 'CodeMap'):
         assert isinstance(other, CodeMap)
@@ -226,7 +250,8 @@ class CodeMap(BaseModel):
             yield symbol
             symbol = self.symbols[symbol.parent]
 
-    def walk_children(self, parent: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+    def walk_children(self, parent: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[
+        Tuple[Symbol, int]]:
         if visited is None:
             visited = {parent.id}
 
@@ -240,7 +265,8 @@ class CodeMap(BaseModel):
             if child.children:
                 yield from self.walk_children(child, depth, visited)
 
-    def walk_dependencies(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+    def walk_dependencies(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[
+        Tuple[Symbol, int]]:
         if visited is None:
             visited = {symbol.id}
 
@@ -254,7 +280,8 @@ class CodeMap(BaseModel):
             if dependency.dependencies:
                 yield from self.walk_dependencies(dependency, depth, visited)
 
-    def walk_dependants(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[Tuple[Symbol, int]]:
+    def walk_dependants(self, symbol: Symbol, depth: int = 0, visited: Optional[Set[Identifier]] = None) -> Iterable[
+        Tuple[Symbol, int]]:
         if visited is None:
             visited = {symbol.id}
 
@@ -272,6 +299,81 @@ class CodeMap(BaseModel):
         for symbol in symbols:
             yield from self.iter(symbol.dependencies)
             yield from self.iter(symbol.dependents)
+
+    def iter_dependency_symbols(self, symbols: Iterable[Symbol]) -> Iterable[Symbol]:
+        for symbol in symbols:
+            yield from self.iter(symbol.dependencies)
+
+    def iter_dependent_symbols(self, symbols: Iterable[Symbol]) -> Iterable[Symbol]:
+        for symbol in symbols:
+            yield from self.iter(symbol.dependents)
+
+    def collect_symbols_from_text(self, text: str, categories: Set[Category]) -> Iterable[Symbol]:
+        names = {m.group(0) for m in RX_NAMES.finditer(text)}
+        for symbol in self.symbols.values():
+            if symbol.category in categories and symbol.name in names:
+                yield symbol
+
+    def collect_relevant_sources(self, relevant_symbols: Set[Symbol]) -> Tuple[List[Symbol], List[Hunk], Set[str]]:
+        relevant_symbol_ids = {symbol.id for symbol in relevant_symbols}
+        relevant_source_set = {self.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols}
+        relevant_sources: List[Symbol] = sorted(relevant_source_set, key=lambda source: source.name)
+
+        relevant_hunks: List[Hunk] = []
+        for source in relevant_sources:
+            document = self.original_sources[source.name]
+
+            relevant_blocks: List[Block] = []
+            for symbol, depth in self.walk_children(source):
+                if symbol.id in relevant_symbol_ids:
+                    relevant_blocks.append(symbol.block)
+
+            assert relevant_blocks, f'No relevant blocks found in source: {source.name}'
+
+            # Add using statements, the LLM must know these
+            for using in self.iter_children_of_category(source, Category.USING):
+                relevant_blocks.append(using.block)
+
+            # Add the top level namespace, the LLM must know these
+            for namespace in self.iter_children_of_category(source, Category.NAMESPACE):
+                block = namespace.block
+                if block.end - block.begin < 2:
+                    continue
+
+                for i in range(namespace.block.begin, namespace.block.end):
+                    if '{' in document.lines[i]:
+                        break
+                else:
+                    continue
+
+                for j in range(namespace.block.end - 1, i - 1, -1):
+                    if '}' in document.lines[j]:
+                        break
+                else:
+                    continue
+
+                relevant_blocks.append(Block.from_range(namespace.block.begin, i + 1))
+                relevant_blocks.append(Block.from_range(j, namespace.block.end))
+
+            relevant_blocks.sort(key=lambda b: b.begin)
+
+            merged_blocks = [relevant_blocks[0]]
+            for b in relevant_blocks[1:]:
+                last = merged_blocks[-1]
+                if b.end <= last.end:
+                    continue
+                if b.begin < last.end:
+                    merged_blocks.append(Block.from_range(last.end, b.end))
+                    continue
+                merged_blocks.append(Block.from_range(b.begin, b.end))
+
+            hunks = [Hunk.from_document(document, b) for b in merged_blocks]
+            patch = Patch.from_hunks(document, hunks)
+            patch.merge_hunks()
+            hunk = patch.hunks[0]
+            relevant_hunks.append(hunk)
+
+        return relevant_sources, relevant_hunks, relevant_symbol_ids
 
     def cross_reference(self):
         self.__remove_external_references()

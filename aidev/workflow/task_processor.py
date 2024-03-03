@@ -3,7 +3,7 @@ import os
 import shutil
 import traceback
 from enum import Enum
-from typing import Set, List, Dict, Iterator, Iterable
+from typing import Set, List, Dict
 
 from pydantic import BaseModel
 
@@ -14,8 +14,8 @@ from ..common.config import C
 from .working_copy import WorkingCopy
 from ..code_map.model import CodeMap, Category, Symbol
 from ..code_map.parsers import detect_parser
-from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, read_binary_file, iter_code_blocks, join_lines, render_html_template
-from ..editing.model import Patch, Block, Hunk, Document
+from ..common.util import render_workflow_template, extract_code_blocks, replace_tripple_backquote, write_text_file, iter_code_blocks, join_lines, render_html_template
+from ..editing.model import Document
 from ..engine.params import GenerationParams, Constraint
 
 
@@ -160,27 +160,9 @@ class TaskProcessor:
         task.paths = paths
 
     async def build_code_map(self):
-        task = self.task
-        wc = self.wc
-
-        code_map = CodeMap.new()
-
-        assert isinstance(wc, WorkingCopy)
-        for path in task.paths:
-            full_path = os.path.join(wc.project_dir, path)
-            parser_cls = detect_parser(full_path)
-            if parser_cls is None:
-                continue
-            parser = parser_cls()
-            content = read_binary_file(full_path)
-            parser.parse(code_map, path, content)
-
-        code_map.cross_reference()
-
-        task.code_map = code_map
+        self.task.code_map = CodeMap.from_working_copy(self.wc, self.task.paths)
 
     async def find_relevant_sources(self):
-        wc = self.wc
         task = self.task
         code_map = task.code_map
 
@@ -219,75 +201,11 @@ class TaskProcessor:
             task.error = f'Could not narrow down the relevant part of the code to work on based on the task description'
             return
 
-        relevant_sources, relevant_hunks, relevant_symbol_ids = self.find_relevant_original_code(relevant_symbols)
+        relevant_sources, relevant_hunks, relevant_symbol_ids = task.code_map.collect_relevant_sources(relevant_symbols)
 
         task.relevant_symbols = relevant_symbol_ids
         task.relevant_paths = [source.name for source in relevant_sources]
         task.relevant_hunks = relevant_hunks
-
-    def find_relevant_original_code(self, relevant_symbols):
-        task = self.task
-        code_map = task.code_map
-
-        relevant_symbol_ids = {symbol.id for symbol in relevant_symbols}
-        relevant_source_set = {code_map.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols}
-        relevant_sources: List[Symbol] = sorted(relevant_source_set, key=lambda source: source.name)
-
-        relevant_hunks: List[Hunk] = []
-        for source in relevant_sources:
-            document = self.original_sources[source.name]
-
-            relevant_blocks: List[Block] = []
-            for symbol, depth in code_map.walk_children(source):
-                if symbol.id in relevant_symbol_ids:
-                    relevant_blocks.append(symbol.block)
-
-            assert relevant_blocks, f'No relevant blocks found in source: {source.name}'
-
-            # Add using statements, the LLM must know these
-            for using in code_map.iter_children_of_category(source, Category.USING):
-                relevant_blocks.append(using.block)
-
-            # Add the top level namespace, the LLM must know these
-            for namespace in code_map.iter_children_of_category(source, Category.NAMESPACE):
-                block = namespace.block
-                if block.end - block.begin < 2:
-                    continue
-
-                for i in range(namespace.block.begin, namespace.block.end):
-                    if '{' in document.lines[i]:
-                        break
-                else:
-                    continue
-
-                for j in range(namespace.block.end - 1, i - 1, -1):
-                    if '}' in document.lines[j]:
-                        break
-                else:
-                    continue
-
-                relevant_blocks.append(Block.from_range(namespace.block.begin, i + 1))
-                relevant_blocks.append(Block.from_range(j, namespace.block.end))
-
-            relevant_blocks.sort(key=lambda b: b.begin)
-
-            merged_blocks = [relevant_blocks[0]]
-            for b in relevant_blocks[1:]:
-                last = merged_blocks[-1]
-                if b.end <= last.end:
-                    continue
-                if b.begin < last.end:
-                    merged_blocks.append(Block.from_range(last.end, b.end))
-                    continue
-                merged_blocks.append(Block.from_range(b.begin, b.end))
-
-            hunks = [Hunk.from_document(document, b) for b in merged_blocks]
-            patch = Patch.from_hunks(document, hunks)
-            patch.merge_hunks()
-            hunk = patch.hunks[0]
-            relevant_hunks.append(hunk)
-
-        return relevant_sources, relevant_hunks, relevant_symbol_ids
 
     async def do_planning(self):
         task = self.task
@@ -327,7 +245,9 @@ class TaskProcessor:
                     task.error = f'Plan comparison generation failed: {compare_gen.error}'
                     return
 
-                vote = sum(json.loads(response)['better_implementation_plan'] == ImplementationPlan.ALPHA for response in compare_gen.completions)
+                vote = sum(
+                    json.loads(response)['better_implementation_plan'] == ImplementationPlan.ALPHA for response in
+                    compare_gen.completions)
                 better_indices.append(alpha_index if vote >= params.n // 2 else beta_index)
 
             if len(completion_indices) % 2:
@@ -465,7 +385,7 @@ class TaskProcessor:
                 if code.strip():
                     if exists:
                         print(f'Modify: {path}')
-                        document = self.original_sources[path]
+                        document = self.task.code_map.original_sources[path]
                         if len(pool) >= 16:
                             await pool.wait()
                         pool.run(self.reintegrate_code_change(document, code))
@@ -596,12 +516,12 @@ class TaskProcessor:
         if not os.path.isfile(path):
             return
 
-        original_source = self.original_sources.get(relpath)
+        original_source = code_map.original_sources.get(relpath)
         modified_source = Document.from_file(wc.project_dir, relpath)
 
         iter_relevant_symbols = code_map.iter(task.relevant_symbols)
         related_symbols = {symbol for symbol in iter_relevant_symbols if symbol.name in feedback}
-        related_sources, related_hunks, related_symbol_ids = self.find_relevant_original_code(related_symbols)
+        related_sources, related_hunks, related_symbol_ids = task.code_map.collect_relevant_sources(related_symbols)
         related_paths = [source.name for source in related_sources]
 
         template_name = f'fix_build_or_test_error'
