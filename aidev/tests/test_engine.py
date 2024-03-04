@@ -163,7 +163,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
     async def test_parallel_load_json_schema(self):
 
         class Answer(BaseModel):
-            question: str
+            reasoning: str
             answer: str
 
         outputs = await self.do_parallel_load(16, constraint=Constraint.from_json_schema(Answer.model_json_schema()))
