@@ -1,0 +1,57 @@
+{% include 'general_rules.jinja' with context %}
+
+<INSTRUCTIONS>
+
+    Your job is to reintegrate the MODIFIED-CODE into ORIGINAL-CODE.
+
+    The MODIFIED-CODE block implements the changes according to the IMPLEMENTATION-PLAN,
+    but only the part which is applicable to the source file below.
+
+    You should not write any new code, just replace the appropriate code lines in
+    ORIGINAL-CODE with the code lines from the MODIFIED-CODE block.
+
+    Reintegrating code means that you MUST KEEP all code from the ORIGINAL-CODE block, except of
+    the code which is modified in the MODIFIED-CODE block. You MUST also ADD any new code introduced
+    in the MODIFIED-CODE block to your RESPONSE.
+
+    Do NOT remove any code, unless it is removed intentionally by the MODIFIED-CODE block according
+    to the IMPLEMENTATION-PLAN.
+
+    ALWAYS INCLUDE OR PRESERVE the using statements required to import all library and project namespaces
+    the code is using in the given source file.
+
+    Your RESPONSE must be a single block of code of the same type (`{{ code_block_type }}`) as the ORIGINAL-CODE.
+
+</INSTRUCTIONS>
+
+<IMPLEMENTATION-PLAN>
+
+    {{ implementation_plan }}
+
+</IMPLEMENTATION-PLAN>
+
+<ORIGINAL-SOURCE-CODE>
+
+    {% for hunk in original_hunks %}
+
+        {% set path = hunk.document.path %}
+        {% set code_block = hunk.code_block %}
+        {% include 'code_block.jinja' with context %}
+
+    {% endfor %}
+
+</ORIGINAL-SOURCE-CODE>
+
+<MODIFIED-SOURCE-CODE>
+
+    {% for hunk in modified_hunks %}
+
+        {% set path = hunk.document.path %}
+        {% set code_block = hunk.code_block %}
+        {% include 'code_block.jinja' with context %}
+
+    {% endfor %}
+
+</MODIFIED-SOURCE-CODE>
+
+Take a deep breath and write your RESPONSE.

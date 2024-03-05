@@ -224,6 +224,8 @@ class CodeMap(BaseModel):
         while symbol is not None:
             if symbol.category == category:
                 return symbol
+            if symbol.parent is None:
+                return None
             symbol = self.symbols[symbol.parent]
 
         return None
@@ -315,8 +317,12 @@ class CodeMap(BaseModel):
                 yield symbol
 
     def collect_relevant_sources(self, relevant_symbols: Set[Symbol]) -> Tuple[List[Symbol], List[Hunk], Set[str]]:
+        function_symbols = {self.find_parent(symbol, Category.FUNCTION) for symbol in relevant_symbols if symbol.parent is not None}
+        function_symbols = {symbol for symbol in function_symbols if symbol is not None}
+        relevant_symbols.update(function_symbols)
+
         relevant_symbol_ids = {symbol.id for symbol in relevant_symbols}
-        relevant_source_set = {self.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols}
+        relevant_source_set = {self.find_parent(symbol, Category.SOURCE) for symbol in relevant_symbols if symbol.parent is not None}
         relevant_sources: List[Symbol] = sorted(relevant_source_set, key=lambda source: source.name)
 
         relevant_hunks: List[Hunk] = []
