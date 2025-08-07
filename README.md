@@ -3,6 +3,18 @@ This project is unfinished. While your may be able to get it running, this is no
 It may still be useful as reference material and a collection of ideas and prompts if you are working on
 similar LLM intergation for automated coding.**
 
+**There are experimental PRs written by the LLM using this tool in the
+[ai-example-shop](https://github.com/viktor-ferenczi/ai-example-shop) repository. 
+The Markdown files include the structured thinking with all the prompts.
+You can use them as examples.**
+
+**For this development I used the CodeLlama 33B and DeepSeek Coder 34B models,
+served locally by vLLM running on 2x4090 GPUs. I have not tried to run this against
+any LLM provider's API, however doing so would have likely resulted in better output.**
+
+**I've given up on this project in Februar 2024, because the quality and efficiency
+was below what I considered useful in practice.**
+
 ---
 
 # AI Developer
