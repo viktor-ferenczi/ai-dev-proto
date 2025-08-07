@@ -1,3 +1,10 @@
+**This project was a research prototype. It worked reasonably well to fix code quality issues found by SonarQube.
+This project is unfinished. While your may be able to get it running, this is not that useful in practice.
+It may still be useful as reference material and a collection of ideas and prompts if you are working on
+similar LLM intergation for automated coding.**
+
+---
+
 # AI Developer
 
 Tooling which allows LLMs to work on software projects along with human developers.
