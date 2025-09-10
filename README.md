@@ -1,7 +1,6 @@
 **This project was a research prototype. It worked reasonably well to fix code quality issues found by SonarQube.
-This project is unfinished. While your may be able to get it running, this is not that useful in practice.
-It may still be useful as reference material and a collection of ideas and prompts if you are working on
-similar LLM intergation for automated coding.**
+This project is unfinished. While it has no practical use these days, it may still be useful as reference material
+and a collection of ideas and prompts if you are working on similar LLM integration for automated coding.**
 
 **There are experimental PRs written by the LLM using this tool in the
 [ai-example-shop](https://github.com/viktor-ferenczi/ai-example-shop) repository. 
